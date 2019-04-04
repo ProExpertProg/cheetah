@@ -14,6 +14,12 @@
  * fib 42: 267914296
  */
 
+int fib(int n);
+
+__attribute__((weak))
+int fib_wrapper(int n) {
+  return fib(n);
+}
 
 int fib(int n) {
     int x, y;
@@ -44,7 +50,7 @@ int main(int argc, char * args[]) {
 
     for(i = 0; i < TIMING_COUNT; i++) {
         begin = ktiming_getmark();
-        res = fib(n);
+        res = fib_wrapper(n);
         end = ktiming_getmark();
         running_time[i] = ktiming_diff_usec(&begin, &end);
     }

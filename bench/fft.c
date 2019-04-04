@@ -3358,7 +3358,7 @@ int opt_types[] = {LONGARG, BOOLARG, BOOLARG, 0};
 
 int main(int argc, char *argv[]) {
 
-    int correctness, help, benchmark;
+    int correctness, help = 0, benchmark;
     long size;
 
     /* standard benchmark options */

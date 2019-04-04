@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 #define USEC_TO_SEC(x) ((double)x*1.0e-9)
 
@@ -52,13 +53,13 @@ clockmark_t ktiming_getmark(void) {
     return nanos;
 }
 
-uint64_t ktiming_diff_usec(const clockmark_t* const 
-                           start, const clockmark_t* const end) {
+uint64_t ktiming_diff_usec(const clockmark_t* const start,
+			   const clockmark_t* const end) {
     return *end - *start;
 }
 
 double ktiming_diff_sec(const clockmark_t* const start, 
-                       const clockmark_t* const end) {
+			const clockmark_t* const end) {
     return ((double)ktiming_diff_usec(start, end)) / 1000000000.0f;
 }
 
@@ -83,7 +84,7 @@ print_runtime_helper(uint64_t *usec_elapsed, int size, int summary) {
             if(diff < 0.0) { diff = -diff; }
             dev_sq_sum += diff * diff;
         }
-        std_dev = dev_sq_sum / (size-1);
+        std_dev = sqrt(dev_sq_sum / (size-1));
     }
 
     printf("Running time average: %g s\n", USEC_TO_SEC(ave));
