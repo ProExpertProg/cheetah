@@ -10,9 +10,9 @@ enum {
 };
 
 static struct options {
-    char *string;
+    const char *string;
     int option;
-    char *help;
+    const char *help;
 } optarray[] = {
     {
         "", END_OPTIONS, "-- : end of option parsing"
