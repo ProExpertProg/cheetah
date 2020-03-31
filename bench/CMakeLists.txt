@@ -39,9 +39,9 @@ target_link_libraries(heat_bench ${LIBRARIES})
 
 add_executable(lu_bench lu.c ${UTIL})
 target_link_libraries(lu_bench ${LIBRARIES})
-#
-# add_executable(matmul_4_way_z_bench matmul_4_way_z.c ${UTIL})
-# target_link_libraries(matmul_4_way_z_bench ${LIBRARIES})
+
+ add_executable(matmul_4_way_z_bench matmul_4_way_z.c ${UTIL})
+ target_link_libraries(matmul_4_way_z_bench ${LIBRARIES})
 
 add_executable(mm_dac_bench mm_dac.c ${UTIL})
 target_link_libraries(mm_dac_bench ${LIBRARIES})
