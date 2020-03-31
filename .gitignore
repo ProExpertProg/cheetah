@@ -14,3 +14,6 @@ handcomp_test/*
 *.a
 *.so
 *.so.*
+
+# cmake build directories
+cmake-build*

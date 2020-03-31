@@ -163,6 +163,11 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CHEETAH_C_FLAGS}")
 # Setup Source Code
 #===============================================================================
 
+if(CHEETAH_INCLUDE_TESTS)
+  # handcomp tests use the shared library
+  set(CHEETAH_ENABLE_SHARED ON)
+endif()
+
 include_directories(runtime)
 
 # Add source code. This also contains all of the logic for deciding linker flags
@@ -171,6 +176,6 @@ add_subdirectory(runtime)
 
 if (CHEETAH_INCLUDE_TESTS)
   # TODO: Set up CMake for Cheetah tests.
-  # add_subdirectory(handcomp_test)
-  # add_subdirectory(bench)
+  add_subdirectory(handcomp_test)
+  add_subdirectory(bench)
 endif()
