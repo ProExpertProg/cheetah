@@ -33,3 +33,15 @@ target_link_libraries(nqueens ${LIBRARIES})
 
 add_executable(cilksort cilksort.c ${UTIL})
 target_link_libraries(cilksort ${LIBRARIES})
+
+add_custom_target(handcomp_check
+        echo \"fib\(26\)\"
+        COMMAND $<TARGET_FILE:fib> --nproc 8 26
+        COMMAND echo \"mm_dac\(512\)\"
+        COMMAND $<TARGET_FILE:mm_dac> --nproc 8 -n 512
+        COMMAND echo \"nqueens\(10\)\"
+        COMMAND $<TARGET_FILE:nqueens> --nproc 8 10
+        COMMAND echo \"cilksort\(3000000\)\"
+        COMMAND $<TARGET_FILE:cilksort> --nproc 8 -n 3000000
+        COMMENT "Checking all targets"
+        DEPENDS fib mm_dac nqueens cilksort)
