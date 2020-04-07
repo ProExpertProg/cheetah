@@ -2,7 +2,7 @@
 #define _CONFIG_H 
 
 #define __CILKRTS_VERSION 0x0
-#define __CILKRTS_ABI_VERSION 0x1
+#define __CILKRTS_ABI_VERSION 0x1u
 
 #define CILK_DEBUG 1
 #define CILK_STATS 0

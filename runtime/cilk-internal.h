@@ -24,6 +24,8 @@
 // Forward declaration
 typedef struct __cilkrts_worker __cilkrts_worker;
 typedef struct __cilkrts_stack_frame __cilkrts_stack_frame;
+typedef struct __cilkrts_loop_frame __cilkrts_loop_frame;
+typedef struct __cilkrts_inner_loop_frame __cilkrts_inner_loop_frame;
 
 //===============================================
 // Cilk stack frame related defs
@@ -77,37 +79,61 @@ struct __cilkrts_stack_frame {
     uint32_t magic;
 };
 
+struct __cilkrts_loop_frame {
+    // This needs to be on top so that we can just convert the pointer to a
+    // __cilkrts_stack_frame
+    __cilkrts_stack_frame sf;
+
+    // The indices for our iterations
+    volatile __uint64_t start;
+    volatile __uint64_t end;
+};
+
+struct __cilkrts_inner_loop_frame {
+    // This needs to be on top so that we can just convert the pointer to a
+    // __cilkrts_stack_frame
+    __cilkrts_stack_frame sf;
+
+    // perhaps the multi-D etc
+};
+
 //===========================================================
 // Value defines for the flags field in cilkrts_stack_frame
 //===========================================================
 
 /* CILK_FRAME_STOLEN is set if the frame has ever been stolen. */
-#define CILK_FRAME_STOLEN 0x01
+#define CILK_FRAME_STOLEN 0x01u
 
 /* CILK_FRAME_UNSYNCHED is set if the frame has been stolen and
    is has not yet executed _Cilk_sync. It is technically a misnomer in that a
    frame can have this flag set even if all children have returned. */
-#define CILK_FRAME_UNSYNCHED 0x02
+#define CILK_FRAME_UNSYNCHED 0x02u
 
 /* Is this frame detached (spawned)? If so the runtime needs
    to undo-detach in the slow path epilogue. */
-#define CILK_FRAME_DETACHED 0x04
+#define CILK_FRAME_DETACHED 0x04u
 
 /* CILK_FRAME_EXCEPTION_PROBED is set if the frame has been probed in the
    exception handler first pass */
-#define CILK_FRAME_EXCEPTION_PROBED 0x08
+#define CILK_FRAME_EXCEPTION_PROBED 0x08u
 
 /* Is this frame receiving an exception after sync? */
-#define CILK_FRAME_EXCEPTING 0x10
+#define CILK_FRAME_EXCEPTING 0x10u
 
 /* Is this the last (oldest) Cilk frame? */
-#define CILK_FRAME_LAST 0x80
+#define CILK_FRAME_LAST 0x80u
 
 /* Is this frame in the epilogue, or more generally after the last
    sync when it can no longer do any Cilk operations? */
-#define CILK_FRAME_EXITING 0x0100
+#define CILK_FRAME_EXITING 0x0100u
 
-#define CILK_FRAME_VERSION (__CILKRTS_ABI_VERSION << 24)
+/* Is this a __cilkrts_loop_frame ? */
+#define CILK_FRAME_LOOP 0x1000u
+
+/* Is this a __cilkrts_loop_frame ? */
+#define CILK_FRAME_INNER_LOOP 0x2000u
+
+#define CILK_FRAME_VERSION (__CILKRTS_ABI_VERSION << 24u)
 
 //===========================================================
 // Helper functions for the flags field in cilkrts_stack_frame
@@ -148,6 +174,16 @@ static inline int __cilkrts_synced(__cilkrts_stack_frame *sf) {
 /* Returns nonzero if the frame has never been stolen. */
 static inline int __cilkrts_not_stolen(__cilkrts_stack_frame *sf) {
     return( (sf->flags & CILK_FRAME_STOLEN) == 0);
+}
+
+/* Returns nonzero if the frame is a loop frame. */
+static inline unsigned int __cilkrts_is_loop(__cilkrts_stack_frame *sf) {
+    return( sf->flags & CILK_FRAME_LOOP);
+}
+
+/* Returns nonzero if the frame is an inner loop frame. */
+static inline unsigned int __cilkrts_is_inner_loop(__cilkrts_stack_frame *sf) {
+    return( sf->flags & CILK_FRAME_INNER_LOOP);
 }
 
 //===============================================

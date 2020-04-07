@@ -34,6 +34,9 @@ target_link_libraries(nqueens ${LIBRARIES})
 add_executable(cilksort cilksort.c ${UTIL})
 target_link_libraries(cilksort ${LIBRARIES})
 
+add_executable(dynamic_for dynamic_for.c ${UTIL})
+target_link_libraries(dynamic_for ${LIBRARIES})
+
 add_custom_target(handcomp_check
         echo \"fib\(26\)\"
         COMMAND $<TARGET_FILE:fib> --nproc 8 26
