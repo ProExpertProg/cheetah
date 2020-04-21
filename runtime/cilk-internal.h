@@ -94,6 +94,9 @@ struct __cilkrts_inner_loop_frame {
     // __cilkrts_stack_frame
     __cilkrts_stack_frame sf;
 
+    // Because we keep entering and leaving the inner loop frame,
+    //  we store a reference to the parent here.
+    WHEN_CILK_DEBUG(__cilkrts_loop_frame * parentLF);
     // perhaps the multi-D etc
 };
 

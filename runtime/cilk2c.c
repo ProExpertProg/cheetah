@@ -59,40 +59,54 @@ void __cilkrts_enter_loop_frame(__cilkrts_loop_frame * lf, __uint64_t start, __u
 }
 
 // inlined by the compiler
-void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
-    __cilkrts_worker * w = __cilkrts_get_tls_worker();
+void __cilkrts_init_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
+    __cilkrts_worker *w = __cilkrts_get_tls_worker();
     __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_loop_frame) frame %p\n", w->self, lf);
 
     lf->sf.flags = CILK_FRAME_VERSION | CILK_FRAME_INNER_LOOP;
-    lf->sf.call_parent = w->current_stack_frame;
     lf->sf.worker = w;
+    lf->sf.call_parent = 0; // gets set in enter
+    CILK_ASSERT(w, __cilkrts_is_loop(w->current_stack_frame));
+    WHEN_CILK_DEBUG(lf->parentLF = (__cilkrts_loop_frame *) w->current_stack_frame);
 
-    CILK_ASSERT(w, __cilkrts_is_loop(lf->sf.call_parent));
+}
+
+// inlined by the compiler
+void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
+    __cilkrts_worker *w = lf->sf.worker;
+    CILK_ASSERT(w, w == __cilkrts_get_tls_worker());
+    __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_enter_inner_loop_frame) frame %p\n", w->self, lf);
+
+    lf->sf.call_parent = w->current_stack_frame;
     w->current_stack_frame = &lf->sf;
+    CILK_ASSERT(w, &lf->parentLF->sf == lf->sf.call_parent);
     // WHEN_CILK_DEBUG(sf->magic = CILK_STACKFRAME_MAGIC);
 }
 
 // inlined by the compiler
-// this function should ONLY be called for the first iteration, before we push the loop frame
-// on the deque
-__cilkrts_pop_lf_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame * lf, __uint64_t *index) {
+__cilkrts_iteration_return __cilkrts_grab_iteration(__cilkrts_inner_loop_frame *lf, __uint64_t *index) {
+    __cilkrts_worker *w = lf->sf.worker;
+    CILK_ASSERT(w, w == __cilkrts_get_tls_worker());
+    __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_grab_iteration) frame %p\n", w->self, lf);
 
-    WHEN_CILK_DEBUG(__cilkrts_worker * w = __cilkrts_get_tls_worker());
-    __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_grab_first_iteration) frame %p\n", w->self, lf);
-    CILK_ASSERT(w, w == lf->sf.worker);
-    CILK_ASSERT(w, w->current_stack_frame == &lf->sf);
-
+    // We must currently be in the loop frame, haven't entered the inner loop frame yet.
+    CILK_ASSERT(w, lf->sf.call_parent == 0);
     CILK_ASSERT(w, __cilkrts_is_inner_loop(&lf->sf));
-    CILK_ASSERT(w, __cilkrts_is_loop(lf->sf.call_parent));
-    CILK_ASSERT(w, (lf->sf.flags & CILK_FRAME_DETACHED) == 0);
-    // this frame shouldn't be detached yet
+    CILK_ASSERT(w, __cilkrts_is_loop(w->current_stack_frame));
 
-    // get first iteration from loopframe
-    __cilkrts_loop_frame *pLoopFrame = (__cilkrts_loop_frame *) lf->sf.call_parent;
+    // this frame shouldn't be detached yet
+    CILK_ASSERT(w, (lf->sf.flags & CILK_FRAME_DETACHED) == 0);
+
+    // get an iteration from loopframe
+    __cilkrts_loop_frame *pLoopFrame = (__cilkrts_loop_frame *) w->current_stack_frame;
+    CILK_ASSERT(w, pLoopFrame == lf->parentLF);
+
     *index = pLoopFrame->start++;
     // TODO perhaps force a store? start is volatile but is that enough?
-    if(pLoopFrame->start > pLoopFrame->end) {
+    if (pLoopFrame->start > pLoopFrame->end) {
         return FAIL;
+    } else if (pLoopFrame->start == pLoopFrame->end) {
+        return SUCCESS_LAST_ITERATION;
     } else {
         return SUCCESS_ITERATION;
     }
@@ -146,47 +160,6 @@ void __cilkrts_sync(__cilkrts_stack_frame *sf) {
     }
 }
 
-__cilkrts_pop_lf_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *lf, __uint64_t *index) {
-    __cilkrts_worker *w = lf->sf.worker;
-    __cilkrts_alert(ALERT_CFRAME,
-                    "[%d]: (__cilkrts_pop_loop_frame) attempting to obtain another iteration for frame %p\n",
-                    w->self, lf);
-    CILK_ASSERT(w, lf->sf.flags & CILK_FRAME_VERSION);
-    CILK_ASSERT(w, lf->sf.worker == __cilkrts_get_tls_worker());
-
-    CILK_ASSERT(w, lf->sf.flags & CILK_FRAME_DETACHED);
-
-    CILK_ASSERT(w, __cilkrts_is_inner_loop(&lf->sf));
-    CILK_ASSERT(w, __cilkrts_is_loop(lf->sf.call_parent));
-
-    // THESE protocol
-
-    __cilkrts_loop_frame *pLoopFrame = (__cilkrts_loop_frame *) lf->sf.call_parent;
-
-    if(w->exc >= w->tail)
-        return FAIL;
-    // TODO the details of this are still unclear. We're trying to prevent this worker ,
-    //  updating variables on a loop frame someone else owns.
-
-    CILK_ASSERT(w, *(w->tail-1) == lf->sf.call_parent);
-
-    *index = pLoopFrame->start++;
-
-    if(pLoopFrame->start > pLoopFrame->end) {
-        pLoopFrame->start--;
-        deque_lock_self(w);
-        pLoopFrame->start++;
-        if(pLoopFrame->start > pLoopFrame->end) {
-            pLoopFrame->start--;
-            deque_unlock_self(w);
-            return FAIL;
-        }
-        deque_unlock_self(w);
-    }
-
-    return SUCCESS_ITERATION;
-}
-
 
 // inlined by the compiler; this implementation is only used in invoke-main.c
 void __cilkrts_pop_frame(__cilkrts_stack_frame * sf) {
@@ -213,7 +186,7 @@ void __cilkrts_leave_frame(__cilkrts_stack_frame * sf) {
         __cilkrts_stack_frame *volatile *t = w->tail;
         --t;
         w->tail = t;
-        __sync_fetch_and_add(&sf->flags, ~CILK_FRAME_DETACHED); 
+        __sync_fetch_and_and(&sf->flags, ~CILK_FRAME_DETACHED);
         // Cilk_membar_StoreLoad(); // the sync_fetch_and_add replaced mfence
                 // which is slightly more efficient.  Note that this
                 // optimiation is applicable *ONLY* on i386 and x86_64
