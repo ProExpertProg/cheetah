@@ -45,7 +45,8 @@ struct cilk_fiber_pool {
 struct cilk_fiber {
   char * m_stack;        // stack low addr, including the mprotected page
   char * m_stack_base;   // the usable portion where it can start grow downward
-  __cilkrts_worker * owner; // worker using this fiber 
+  __cilkrts_worker * owner; // worker using this fiber
+  int has_loop_frame;    // has a loopframe at the base
 };
 
 

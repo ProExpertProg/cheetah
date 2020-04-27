@@ -28,6 +28,7 @@ void __cilkrts_enter_frame(__cilkrts_stack_frame *sf) {
     sf->worker = w;
     w->current_stack_frame = sf;
     // WHEN_CILK_DEBUG(sf->magic = CILK_STACKFRAME_MAGIC);
+    CILK_ASSERT(w, !__cilkrts_is_loop(sf));
 }
 
 // inlined by the compiler; this implementation is only used in invoke-main.c
@@ -40,12 +41,13 @@ void __cilkrts_enter_frame_fast(__cilkrts_stack_frame * sf) {
     sf->worker = w;
     w->current_stack_frame = sf;
     // WHEN_CILK_DEBUG(sf->magic = CILK_STACKFRAME_MAGIC);
+    CILK_ASSERT(w, !__cilkrts_is_loop(sf));
 }
 
 // inlined by the compiler
 void __cilkrts_enter_loop_frame(__cilkrts_loop_frame * lf, __uint64_t start, __uint64_t end) {
     __cilkrts_worker * w = __cilkrts_get_tls_worker();
-    __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_loop_frame) frame %p\n", w->self, lf);
+    __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_enter_loop_frame) frame %p\n", w->self, lf);
 
     lf->sf.flags = CILK_FRAME_VERSION | CILK_FRAME_LOOP;
     lf->sf.call_parent = w->current_stack_frame;
@@ -56,12 +58,13 @@ void __cilkrts_enter_loop_frame(__cilkrts_loop_frame * lf, __uint64_t start, __u
 
     w->current_stack_frame = &lf->sf;
     // WHEN_CILK_DEBUG(sf->magic = CILK_STACKFRAME_MAGIC);
+    CILK_ASSERT(w, __cilkrts_is_loop(&lf->sf));
 }
 
 // inlined by the compiler
 void __cilkrts_init_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
-    __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_loop_frame) frame %p\n", w->self, lf);
+    __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_init_inner_loop_frame) frame %p\n", w->self, lf);
 
     lf->sf.flags = CILK_FRAME_VERSION | CILK_FRAME_INNER_LOOP;
     lf->sf.worker = w;
@@ -74,8 +77,12 @@ void __cilkrts_init_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
 // inlined by the compiler
 void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
     __cilkrts_worker *w = lf->sf.worker;
-    CILK_ASSERT(w, w == __cilkrts_get_tls_worker());
+
     __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_enter_inner_loop_frame) frame %p\n", w->self, lf);
+    CILK_ASSERT(w, w == __cilkrts_get_tls_worker());
+    CILK_ASSERT(w, !__cilkrts_is_loop(&lf->sf));
+    CILK_ASSERT(w, __cilkrts_is_inner_loop(&lf->sf));
+    CILK_ASSERT(w, (lf->sf.flags & CILK_FRAME_DETACHED) == 0);
 
     lf->sf.call_parent = w->current_stack_frame;
     w->current_stack_frame = &lf->sf;
@@ -86,8 +93,10 @@ void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
 // inlined by the compiler
 __cilkrts_iteration_return __cilkrts_grab_iteration(__cilkrts_inner_loop_frame *lf, __uint64_t *index) {
     __cilkrts_worker *w = lf->sf.worker;
-    CILK_ASSERT(w, w == __cilkrts_get_tls_worker());
     __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_grab_iteration) frame %p\n", w->self, lf);
+    CILK_ASSERT(w, w == __cilkrts_get_tls_worker());
+    CILK_ASSERT(w, !__cilkrts_is_loop(&lf->sf));
+    CILK_ASSERT(w, __cilkrts_is_inner_loop(&lf->sf));
 
     // We must currently be in the loop frame, haven't entered the inner loop frame yet.
     CILK_ASSERT(w, lf->sf.call_parent == 0);
@@ -102,10 +111,14 @@ __cilkrts_iteration_return __cilkrts_grab_iteration(__cilkrts_inner_loop_frame *
     CILK_ASSERT(w, pLoopFrame == lf->parentLF);
 
     *index = pLoopFrame->start++;
+    __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_grab_iteration) Iteration %d unconfirmed\n", w->self, *index);
+
     // TODO perhaps force a store? start is volatile but is that enough?
     if (pLoopFrame->start > pLoopFrame->end) {
+        __cilkrts_alert(ALERT_LOOP, "[%d]: (__cilkrts_grab_iteration) Loop ending at i=%i\n", w->self, *index);
         return FAIL;
     } else if (pLoopFrame->start == pLoopFrame->end) {
+        __cilkrts_alert(ALERT_LOOP, "[%d]: (__cilkrts_grab_iteration) Last iteration with i=%i\n", w->self, *index);
         return SUCCESS_LAST_ITERATION;
     } else {
         return SUCCESS_ITERATION;
@@ -210,6 +223,55 @@ void __cilkrts_leave_frame(__cilkrts_stack_frame * sf) {
             CILK_ASSERT(w, w->current_stack_frame->flags & CILK_FRAME_VERSION);
         }
     }
+}
+
+void __cilkrts_leave_loop_frame(__cilkrts_loop_frame * lf) {
+
+    __cilkrts_worker *w = lf->sf.worker;
+    __cilkrts_alert(ALERT_CFRAME,
+        "[%d]: (__cilkrts_leave_loop_frame) leaving frame %p\n", w->self, lf);
+
+    CILK_ASSERT(w, lf->sf.flags & CILK_FRAME_VERSION);
+    CILK_ASSERT(w, __cilkrts_is_loop(&lf->sf));
+    CILK_ASSERT(w, lf->sf.worker == __cilkrts_get_tls_worker());
+    CILK_ASSERT(w, lf == w->local_loop_frame);
+
+    // We've already passed the cilk_sync
+    CILK_ASSERT(w, __cilkrts_synced(&lf->sf));
+
+    // WHEN_CILK_DEBUG(sf->magic = ~CILK_STACKFRAME_MAGIC);
+
+    if(lf->sf.flags & CILK_FRAME_SPLIT) {
+        // if this frame is split
+
+        // this is the equivalent of a DETACHED standard frame, except that
+        // the THE protocol is unnecessary. Rather, we behave as if we've
+        // already failed the THE protocol (the frame is split, so somebody
+        // stole the remaining iterations). We simply end the current closure
+        // and attempt a provably good steal on the parent.
+
+        // this is pointing at our frame parent, but our closure parent is
+        // another LoopFrame, so let's unset to avoid confusion.
+        w->current_stack_frame = NULL;
+
+        Cilk_loop_frame_return();
+    } else {
+        // This loop frame is not split, which means it is the last one remaining
+        // (that is certain because we've successfully passed the cilk_sync).
+        // Hence, this protocol is the same as the one for a non-DETACHED standard frame.
+        if(lf->sf.flags & CILK_FRAME_STOLEN) { // if this frame has a full frame
+            __cilkrts_alert(ALERT_RETURN,
+                "[%d]: (__cilkrts_leave_frame) parent is call_parent!\n", w->self);
+            // leaving a full frame; need to get the full frame of its call
+            // parent back onto the deque
+            Cilk_set_return(w);
+            CILK_ASSERT(w, w->current_stack_frame->flags & CILK_FRAME_VERSION);
+        }
+    }
+}
+
+inline __cilkrts_loop_frame * local_lf(){
+    return __cilkrts_get_tls_worker()->local_loop_frame;
 }
 
 int __cilkrts_get_nworkers(void) {

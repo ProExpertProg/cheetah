@@ -59,8 +59,10 @@ void daxpy(double *y, double *x, double a, uint64_t n) {
     if (!__builtin_setjmp(lf.sf.ctx)) {
         // first time entering this loop,
         // else is entering the loop after steal
-
         // make sure the setjmp doesn't get optimized away.
+
+        __cilkrts_get_tls_worker()->local_loop_frame = &lf;
+
     } else {
 
     }
@@ -68,11 +70,15 @@ void daxpy(double *y, double *x, double a, uint64_t n) {
     daxpy_loop_helper(y, x, a);
 
     // TODO sync
+    if(__cilkrts_unsynced(&local_lf()->sf)) {
+        __cilkrts_save_fp_ctrl_state(&local_lf()->sf);
+        if(!__builtin_setjmp(local_lf()->sf.ctx)) {
+            __cilkrts_sync(&local_lf()->sf);
+        }
+    }
 
-    // going to victim's stack should be fine
-
-    __cilkrts_pop_frame(&lf.sf);
-    __cilkrts_leave_frame(&lf.sf);
+    __cilkrts_pop_frame(&local_lf()->sf);
+    __cilkrts_leave_loop_frame(local_lf());
 
     //outer loop frame end scope
 }

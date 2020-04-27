@@ -136,6 +136,9 @@ struct __cilkrts_inner_loop_frame {
 /* Is this a __cilkrts_loop_frame ? */
 #define CILK_FRAME_INNER_LOOP 0x2000u
 
+/* Was a split performed on this frame ? */
+#define CILK_FRAME_SPLIT 0x4000u
+
 #define CILK_FRAME_VERSION (__CILKRTS_ABI_VERSION << 24u)
 
 //===========================================================
@@ -187,6 +190,15 @@ static inline unsigned int __cilkrts_is_loop(__cilkrts_stack_frame *sf) {
 /* Returns nonzero if the frame is an inner loop frame. */
 static inline unsigned int __cilkrts_is_inner_loop(__cilkrts_stack_frame *sf) {
     return( sf->flags & CILK_FRAME_INNER_LOOP);
+}
+
+/* Returns nonzero if the frame is an inner loop frame. */
+static inline unsigned int __cilkrts_is_split(__cilkrts_stack_frame *sf) {
+    return( sf->flags & CILK_FRAME_SPLIT);
+}
+
+static inline void __cilkrts_set_split(__cilkrts_loop_frame *lf) {
+    lf->sf.flags |= CILK_FRAME_SPLIT;
 }
 
 //===============================================
@@ -292,6 +304,10 @@ struct __cilkrts_worker {
 
     // A slot that points to the currently executing Cilk frame.
     __cilkrts_stack_frame * current_stack_frame;
+
+    // Because a thief needs its own loopframe while operating on the same stack,
+    // that needs to be saved somewhere not in a local variable
+    __cilkrts_loop_frame * local_loop_frame;
 };
 
 #endif // _CILK_INTERNAL_H

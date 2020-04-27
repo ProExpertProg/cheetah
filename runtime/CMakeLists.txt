@@ -12,6 +12,7 @@ set(CHEETAH_SOURCES
   internal-malloc.c
   invoke-main.c
   mutex.c
+  loop-frames.c
   readydeque.c
   sched_stats.c
   scheduler.c

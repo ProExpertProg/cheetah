@@ -4,6 +4,7 @@
 
 #include "fiber.h"
 #include "cilk-internal.h"
+#include "scheduler.h"
 
 //===============================================================
 // This file maintains fiber-related function that requires
@@ -71,6 +72,7 @@ static void fiber_init(struct cilk_fiber * fiber) {
     fiber->m_stack = NULL;
     fiber->m_stack_base = NULL;
     fiber->owner = NULL;
+    fiber->has_loop_frame = 0;
 }
 
 /*
@@ -99,12 +101,29 @@ void sysdep_save_fp_ctrl_state(__cilkrts_stack_frame *sf) {
 char* sysdep_reset_jump_buffers_for_resume(struct cilk_fiber* fiber,
                                            __cilkrts_stack_frame *sf) {
     CILK_ASSERT_G(fiber);
-    char* new_stack_base = fiber->m_stack_base - 256;
+    char *new_stack_base = fiber->m_stack_base - 256;
 
+    if (fiber->has_loop_frame) {
+        // make sure the loop frame is actually at the position required
+
+        WHEN_CILK_DEBUG(__cilkrts_worker *w = __cilkrts_get_tls_worker());
+        WHEN_CILK_DEBUG(__cilkrts_loop_frame *lf = w->local_loop_frame);
+
+        __cilkrts_alert(ALERT_LOOP,
+                        "[%d]: (sysdep_reset_jump_buffers_for_resume) LoopFrame %p on bottom of fiber %p\n",
+                        w->self, lf, fiber);
+
+        CILK_ASSERT(w, lf);
+        CILK_ASSERT(w, __cilkrts_is_loop(&lf->sf));
+        CILK_ASSERT(w, lf->sf.flags & CILK_FRAME_VERSION);
+        CILK_ASSERT(w, (char *) lf == (fiber->m_stack_base - sizeof(__cilkrts_loop_frame)));
+
+        new_stack_base = fiber->m_stack_base - sizeof(__cilkrts_loop_frame) - 256;
+    }
     // Whatever correction we choose, align the final stack top.
     // This alignment seems to be necessary in particular on 32-bit
     // Linux, and possibly Mac. (Is 32-byte alignment is sufficient?)
-    const uintptr_t align_mask = ~(256 -1); // 256-byte alignment. 
+    const uintptr_t align_mask = ~(256 -1); // 256-byte alignment.
     new_stack_base = (char*)((size_t)new_stack_base & align_mask);
     void* sp = (void*) new_stack_base;
     SP(sf) = sp;
