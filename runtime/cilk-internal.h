@@ -139,6 +139,9 @@ struct __cilkrts_inner_loop_frame {
 /* Was a split performed on this frame ? */
 #define CILK_FRAME_SPLIT 0x4000u
 
+/* Was this frame allocated dynamically? */
+#define CILK_FRAME_DYNAMIC 0x8000u
+
 #define CILK_FRAME_VERSION (__CILKRTS_ABI_VERSION << 24u)
 
 //===========================================================
@@ -199,6 +202,20 @@ static inline unsigned int __cilkrts_is_split(__cilkrts_stack_frame *sf) {
 
 static inline void __cilkrts_set_split(__cilkrts_loop_frame *lf) {
     lf->sf.flags |= CILK_FRAME_SPLIT;
+}
+
+// should only be used when copying frames. A frame cannot be "unsplit"
+static inline void __cilkrts_set_nonsplit(__cilkrts_loop_frame *lf) {
+    lf->sf.flags &= ~CILK_FRAME_SPLIT;
+}
+
+/* Returns nonzero if the frame was allocated dynamically (not the original frame). */
+static inline unsigned int __cilkrts_is_dynamic(__cilkrts_stack_frame *sf) {
+    return (sf->flags & CILK_FRAME_DYNAMIC);
+}
+
+static inline void __cilkrts_set_dynamic(__cilkrts_loop_frame *lf) {
+    lf->sf.flags |= CILK_FRAME_DYNAMIC;
 }
 
 //===============================================

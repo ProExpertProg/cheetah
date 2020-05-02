@@ -353,32 +353,23 @@ Closure * Closure_return(__cilkrts_worker *const w, Closure *child) {
 
     Closure_lock(w, child);
 
-    if (child->fiber->has_loop_frame) {
-        CILK_ASSERT(w, __cilkrts_is_loop(child->frame));
-        CILK_ASSERT(w, (char *) child->frame == get_loop_frame_address(child->fiber));
+    if (child->frame && __cilkrts_is_loop(child->frame)) {
 
         // we'd be returning to the call_parent if this wasn't a split frame
         CILK_ASSERT(w, __cilkrts_is_split(child->frame));
         CILK_ASSERT(w, w->current_stack_frame == NULL);
 
-    } else if(__cilkrts_is_loop(child->frame)) {
-        // Most original frame, locally allocated by the first worker
-        CILK_ASSERT(w, __cilkrts_is_split(child->frame));
-        CILK_ASSERT(w, w->current_stack_frame == NULL);
-
-        CILK_ASSERT(w, parent->most_original_loop_frame == NULL);
-        CILK_ASSERT(w, child->left_sib == NULL);
+        if(!__cilkrts_is_dynamic(child->frame)) {
+            CILK_ASSERT(w, parent->most_original_loop_frame == NULL);
+            CILK_ASSERT(w, parent->fiber_child == NULL);
+            CILK_ASSERT(w, child->left_sib == NULL);
+        }
     }
 
     // Execute left-holder logic for stacks.
     if(child->left_sib || parent->fiber_child) {
         // Case where we are not the leftmost stack.
         CILK_ASSERT(w, parent->fiber_child != child->fiber);
-        CILK_ASSERT(w, &parent->most_original_loop_frame->sf != child->frame);
-
-        // We are done with this loop frame (if there is one), so it's okay to deallocate the fiber
-        child->fiber->has_loop_frame = 0;
-
         cilk_fiber_deallocate_to_pool(w, child->fiber);
     } else {
         // We are leftmost, pass stack/fiber up to parent.  
@@ -388,12 +379,15 @@ Closure * Closure_return(__cilkrts_worker *const w, Closure *child) {
         // If we're currently a loop frame, we must pass ourselves to the parent
         // (unless one has already been passed)
 
-        if (__cilkrts_is_loop(child->frame) && !parent->most_original_loop_frame) {
-            // NOTE: this one is not necessarily on the bottom of child's fiber
-            // - it could be the o original LoopFrame, which is allocated locally.
+        if (child->frame && __cilkrts_is_loop(child->frame)
+            && !__cilkrts_is_dynamic(child->frame)) {
+            // NOTE: This is the original LoopFrame, which is allocated locally.
             __cilkrts_alert(ALERT_LOOP | ALERT_RETURN,
                             "[%d]: Setting most_orig_lf of parent %p to frame %p\n",
                             w->self, parent, child->frame);
+            CILK_ASSERT(w, __cilkrts_is_loop(parent->frame));
+            CILK_ASSERT(w, __cilkrts_is_split(child->frame));
+            CILK_ASSERT(w, parent->most_original_loop_frame == NULL);
             parent->most_original_loop_frame = (__cilkrts_loop_frame *) child->frame;
         }
     }
@@ -1007,32 +1001,6 @@ int Cilk_sync(__cilkrts_worker *const w, __cilkrts_stack_frame *frame) {
 
     if(Closure_has_children(t)) {
         __cilkrts_alert(ALERT_SYNC, "[%d]: (Cilk_sync) outstanding children\n", w->self, frame);
-
-        if (t->fiber->has_loop_frame) {
-            // We are about to free this fiber but we still need the loop frame.
-            // The only outstanding children must be other LoopFrames, which means
-            // no one else is referring to the current LoopFrame, so we can reallocate it.
-            // We also know it's not the original LoopFrame, as that one is allocated locally
-            // and not on the bottom of its fiber.
-
-            CILK_ASSERT(w, __cilkrts_is_loop(t->frame));
-            CILK_ASSERT(w, (char *) t->frame == get_loop_frame_address(t->fiber));
-
-            CILK_ASSERT(w, t->temp_loop_frame == NULL);
-            t->temp_loop_frame = allocate_temp_loop_frame(w);
-
-            __cilkrts_alert(ALERT_LOOP,
-                            "[%d]: freeing frame %p on fiber %p, using temp frame %p for closure %p\n",
-                            w->self, t->frame, t->fiber, t->temp_loop_frame, t);
-
-            memcpy(t->temp_loop_frame, t->frame, sizeof(__cilkrts_loop_frame));
-            t->fiber->has_loop_frame = 0;
-            frame = &t->temp_loop_frame->sf;
-            t->frame = frame;
-            w->current_stack_frame = frame;
-            w->local_loop_frame = t->temp_loop_frame;
-            // TODO a lot of these might be redundant.
-        }
 
         w->l->fiber_to_free = t->fiber;
         t->fiber = NULL;

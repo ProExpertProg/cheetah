@@ -77,10 +77,6 @@ struct Closure {
   Closure *next_ready;
   Closure *prev_ready;
 
-  // When we suspend a closure, we free its fiber, so we must temporarily
-  // store the LoopFrame somewhere else.
-  __cilkrts_loop_frame *temp_loop_frame;
-
   // Once we sync all children and return, we want to be doing that on the
   // most original LoopFrame, which will come from the leftmost leaf (of LoopFrames).
   __cilkrts_loop_frame *most_original_loop_frame;

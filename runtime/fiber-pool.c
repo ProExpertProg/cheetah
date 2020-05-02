@@ -379,8 +379,6 @@ void cilk_fiber_deallocate_to_pool(__cilkrts_worker *w,
                                    struct cilk_fiber *fiber_to_return) {
     struct cilk_fiber_pool *pool = &(w->l->fiber_pool);
 
-    CILK_ASSERT(w, fiber_to_return->has_loop_frame == 0);
-
     if(pool->size == pool->capacity) {
         fiber_pool_free_batch(w, pool, pool->capacity/BATCH_FRACTION);
         CILK_ASSERT(w, 
