@@ -113,7 +113,6 @@ __cilkrts_iteration_return __cilkrts_grab_iteration(__cilkrts_inner_loop_frame *
     *index = pLoopFrame->start++;
     __cilkrts_alert(ALERT_CFRAME, "[%d]: (__cilkrts_grab_iteration) Iteration %d unconfirmed\n", w->self, *index);
 
-    // TODO perhaps force a store? start is volatile but is that enough?
     if (pLoopFrame->start > pLoopFrame->end) {
         __cilkrts_alert(ALERT_LOOP, "[%d]: (__cilkrts_grab_iteration) Loop ending at i=%i\n", w->self, *index);
         return FAIL;
@@ -161,6 +160,14 @@ void __cilkrts_sync(__cilkrts_stack_frame *sf) {
     CILK_ASSERT(w, sf == w->current_stack_frame);
 
     if( Cilk_sync(w, sf) == SYNC_READY ) {
+        // the sync could reallocate the LoopFrame.
+        if (sf != w->current_stack_frame) {
+            // sf is not a valid location anymore
+            CILK_ASSERT(w, __cilkrts_is_loop(w->current_stack_frame));
+            CILK_ASSERT(w, w->current_stack_frame == &w->local_loop_frame->sf);
+            sf = w->current_stack_frame;
+        }
+
         __cilkrts_alert(ALERT_SYNC, 
             "[%d]: (__cilkrts_sync) synced frame %p!\n", w->self, sf);
         // The Cilk_sync restores the original rsp stored in sf->ctx

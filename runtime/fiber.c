@@ -5,6 +5,7 @@
 #include "fiber.h"
 #include "cilk-internal.h"
 #include "scheduler.h"
+#include "loop-frames.h"
 
 //===============================================================
 // This file maintains fiber-related function that requires
@@ -116,7 +117,7 @@ char* sysdep_reset_jump_buffers_for_resume(struct cilk_fiber* fiber,
         CILK_ASSERT(w, lf);
         CILK_ASSERT(w, __cilkrts_is_loop(&lf->sf));
         CILK_ASSERT(w, lf->sf.flags & CILK_FRAME_VERSION);
-        CILK_ASSERT(w, (char *) lf == (fiber->m_stack_base - sizeof(__cilkrts_loop_frame)));
+        CILK_ASSERT(w, (char *) lf == get_loop_frame_address(fiber));
 
         new_stack_base = fiber->m_stack_base - sizeof(__cilkrts_loop_frame) - 256;
     }

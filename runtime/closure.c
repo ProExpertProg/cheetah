@@ -85,6 +85,9 @@ static inline void Closure_init(Closure *t) {
   t->next_ready = NULL;
   t->prev_ready = NULL;
 
+  t->temp_loop_frame = NULL;
+  t->most_original_loop_frame = NULL;
+
   WHEN_CILK_DEBUG(t->owner_ready_deque = NOBODY);
   WHEN_CILK_DEBUG(t->magic = CILK_CLOSURE_MAGIC);
 }

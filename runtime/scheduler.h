@@ -16,7 +16,6 @@ void __cilkrts_set_tls_worker(__cilkrts_worker *w);
 int Cilk_sync(__cilkrts_worker *const ws, 
               __cilkrts_stack_frame *frame);
 
-// TODO better name
 __attribute__((noreturn)) void Cilk_loop_frame_return();
 void Cilk_set_return(__cilkrts_worker *const ws);
 void Cilk_exception_handler();

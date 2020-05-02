@@ -22,7 +22,7 @@ struct global_state;
 #define ALERT_CFRAME 0x80
 #define ALERT_LOOP   0x100
 
-#define ALERT_LVL ALERT_NONE
+#define ALERT_LVL (~ALERT_CFRAME)
 
 // Unused: compiler inlines the stack frame creation 
 // #define CILK_STACKFRAME_MAGIC 0xCAFEBABE

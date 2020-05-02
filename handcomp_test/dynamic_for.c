@@ -69,7 +69,6 @@ void daxpy(double *y, double *x, double a, uint64_t n) {
 
     daxpy_loop_helper(y, x, a);
 
-    // TODO sync
     if(__cilkrts_unsynced(&local_lf()->sf)) {
         __cilkrts_save_fp_ctrl_state(&local_lf()->sf);
         if(!__builtin_setjmp(local_lf()->sf.ctx)) {
@@ -113,7 +112,7 @@ int cilk_main(int argc, char *argv[]) {
     for (int i = 0; i < N; ++i) {
         x[i] = rand() % 1000;
     }
-
+    //while(1)
     daxpy(y, x, a, N);
 
 
