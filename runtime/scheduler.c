@@ -92,8 +92,6 @@ static void setup_for_execution(__cilkrts_worker * w, Closure *t) {
     w->current_stack_frame = t->frame;
     if (__cilkrts_is_loop(t->frame)) {
         w->local_loop_frame = (__cilkrts_loop_frame *) t->frame;
-        // this frame could either be stored on the new fiber (if it was split)
-        // or on a previous fiber (if we took the whole frame).
     }
     reset_exception_pointer(w, t);
 }
@@ -187,7 +185,6 @@ setup_call_parent_resumption(__cilkrts_worker *const w, Closure *t) {
     // If returning from a loop frame, it must have been the last one,
     // so the parent must be set correctly.
     CILK_ASSERT(w, w->current_stack_frame == t->frame);
-
 
     t->status = CLOSURE_RUNNING;
     t->frame->worker = w;
@@ -376,8 +373,7 @@ Closure * Closure_return(__cilkrts_worker *const w, Closure *child) {
         // Thus, no stack/fiber to free.
         parent->fiber_child = child->fiber;
 
-        // If we're currently a loop frame, we must pass ourselves to the parent
-        // (unless one has already been passed)
+        // If we're the original loop frame, we must pass ourselves to the parent
 
         if (child->frame && __cilkrts_is_loop(child->frame)
             && !__cilkrts_is_dynamic(child->frame)) {
@@ -387,7 +383,7 @@ Closure * Closure_return(__cilkrts_worker *const w, Closure *child) {
                             w->self, parent, child->frame);
             CILK_ASSERT(w, __cilkrts_is_loop(parent->frame));
             CILK_ASSERT(w, __cilkrts_is_split(child->frame));
-            CILK_ASSERT(w, parent->most_original_loop_frame == NULL);
+            CILK_ASSERT(w, parent->most_original_loop_frame == NULL); // There can only be one
             parent->most_original_loop_frame = (__cilkrts_loop_frame *) child->frame;
         }
     }
@@ -627,8 +623,9 @@ int do_dekker_on(__cilkrts_worker *const w,
  *       deque to get the parent closure.  This is the only time I can 
  *       think of, where the ready deque contains more than one frame.
  ***/
-Closure *promote_child(__cilkrts_worker *const w, __cilkrts_worker *const victim_w, Closure *cl, Closure **res,
-                       struct cilk_fiber *fiber) {
+Closure *promote_child(__cilkrts_worker *const w,
+		       __cilkrts_worker *const victim_w,
+                       Closure *cl, Closure **res) {
 
     int pn = victim_w->self;
 
@@ -661,7 +658,7 @@ Closure *promote_child(__cilkrts_worker *const w, __cilkrts_worker *const victim
 
     // check whether this is a loop frame that we need to split.
 
-    __cilkrts_loop_frame *new_loop_frame = split_loop_frame(frame_to_steal, w, fiber);
+    __cilkrts_loop_frame *new_loop_frame = split_loop_frame(frame_to_steal, w);
 
     // ANGE: if cl's frame is not set, the top stacklet must contain more 
     // than one frame, because the right-most (oldest) frame must be a spawn
@@ -836,7 +833,7 @@ Closure *Closure_steal(__cilkrts_worker *const w, int victim) {
                      * if dekker passes, promote the child to a full closure, 
                      * and steal the parent
                      */
-                    child = promote_child(w, victim_w, cl, &res, fiber);
+                    child = promote_child(w, victim_w, cl, &res);
                     __cilkrts_alert(ALERT_STEAL, 
                         "[%d]: (Closure_steal) promote gave cl/res/child = %p/%p/%p\n", w->self, cl, res, child);
 

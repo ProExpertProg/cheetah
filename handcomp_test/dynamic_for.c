@@ -112,7 +112,7 @@ int cilk_main(int argc, char *argv[]) {
     for (int i = 0; i < N; ++i) {
         x[i] = rand() % 1000;
     }
-    //while(1)
+
     daxpy(y, x, a, N);
 
 

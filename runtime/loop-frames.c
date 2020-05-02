@@ -7,8 +7,7 @@
 #include <string.h>
 
 // returns the new loop frame on success, NULL on failure
-__cilkrts_loop_frame *split_loop_frame(__cilkrts_stack_frame *frame_to_steal,
-                                       __cilkrts_worker *w, struct cilk_fiber *fiber) {
+__cilkrts_loop_frame *split_loop_frame(__cilkrts_stack_frame *frame_to_steal, __cilkrts_worker *w) {
     if (__cilkrts_is_loop(frame_to_steal)) {
         __cilkrts_loop_frame *lf = (__cilkrts_loop_frame *) frame_to_steal;
         uint64_t len = lf->end - lf->start;
@@ -16,7 +15,7 @@ __cilkrts_loop_frame *split_loop_frame(__cilkrts_stack_frame *frame_to_steal,
             // split the frame in half
 
             uint64_t mid = lf->start + len / 2;
-            __cilkrts_loop_frame *new_lf = clone_loop_frame(lf, w, fiber);
+            __cilkrts_loop_frame *new_lf = clone_loop_frame(lf, w);
 
             __cilkrts_alert(ALERT_LOOP, "[%d]: (split_loop_frame) Splitting frame %p [%d:%d] in two (new_lf=%p)!\n",
                             w->self, lf, lf->start, lf->end, new_lf);
@@ -43,7 +42,7 @@ __cilkrts_loop_frame *split_loop_frame(__cilkrts_stack_frame *frame_to_steal,
 }
 
 __cilkrts_loop_frame *
-clone_loop_frame(__cilkrts_loop_frame *loop_frame, __cilkrts_worker *w, struct cilk_fiber *fiber) {
+clone_loop_frame(__cilkrts_loop_frame *loop_frame, __cilkrts_worker *w) {
     __cilkrts_loop_frame *new_lf = cilk_internal_malloc(w, sizeof(__cilkrts_loop_frame));
     memcpy(new_lf, loop_frame, sizeof(__cilkrts_loop_frame));
     __cilkrts_set_dynamic(new_lf);

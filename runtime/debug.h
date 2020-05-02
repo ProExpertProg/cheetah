@@ -11,18 +11,18 @@ struct global_state;
 
 #define CILK_CHECK(g, cond, complain) if(!cond) cilk_die_internal(g, complain)
 
-#define ALERT_NONE   0x0
-#define ALERT_FIBER  0x1
-#define ALERT_SYNC   0x2
-#define ALERT_SCHED  0x4
-#define ALERT_STEAL  0x8
-#define ALERT_EXCEPT 0x10
-#define ALERT_RETURN 0x20
-#define ALERT_BOOT   0x40
-#define ALERT_CFRAME 0x80
-#define ALERT_LOOP   0x100
+#define ALERT_NONE   0x0u
+#define ALERT_FIBER  0x1u
+#define ALERT_SYNC   0x2u
+#define ALERT_SCHED  0x4u
+#define ALERT_STEAL  0x8u
+#define ALERT_EXCEPT 0x10u
+#define ALERT_RETURN 0x20u
+#define ALERT_BOOT   0x40u
+#define ALERT_CFRAME 0x80u
+#define ALERT_LOOP   0x100u
 
-#define ALERT_LVL (~ALERT_CFRAME)
+#define ALERT_LVL ALERT_NONE
 
 // Unused: compiler inlines the stack frame creation 
 // #define CILK_STACKFRAME_MAGIC 0xCAFEBABE

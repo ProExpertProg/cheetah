@@ -4,8 +4,6 @@
 
 #include "fiber.h"
 #include "cilk-internal.h"
-#include "scheduler.h"
-#include "loop-frames.h"
 
 //===============================================================
 // This file maintains fiber-related function that requires
@@ -101,7 +99,7 @@ void sysdep_save_fp_ctrl_state(__cilkrts_stack_frame *sf) {
 char* sysdep_reset_jump_buffers_for_resume(struct cilk_fiber* fiber,
                                            __cilkrts_stack_frame *sf) {
     CILK_ASSERT_G(fiber);
-    char *new_stack_base = fiber->m_stack_base - 256;
+    char* new_stack_base = fiber->m_stack_base - 256;
 
     // Whatever correction we choose, align the final stack top.
     // This alignment seems to be necessary in particular on 32-bit
