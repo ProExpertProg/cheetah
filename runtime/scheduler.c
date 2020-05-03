@@ -360,6 +360,9 @@ Closure * Closure_return(__cilkrts_worker *const w, Closure *child) {
             CILK_ASSERT(w, parent->most_original_loop_frame == NULL);
             CILK_ASSERT(w, parent->fiber_child == NULL);
             CILK_ASSERT(w, child->left_sib == NULL);
+        } else {
+            cilk_internal_free(w, child->frame, sizeof(__cilkrts_loop_frame));
+            child->frame = NULL;
         }
     }
 
