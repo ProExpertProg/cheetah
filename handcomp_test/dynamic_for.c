@@ -123,11 +123,11 @@ int cilk_main(int argc, char *argv[]) {
     clockmark_t begin, end;
     uint64_t running_time[TIMING_COUNT];
 
-    for(int i = 0; i < TIMING_COUNT; i++) {
+    for(int t = 0; t < TIMING_COUNT; t++) {
         begin = ktiming_getmark();
         daxpy(y, x, a, N);
         end = ktiming_getmark();
-        running_time[i] = ktiming_diff_usec(&begin, &end);
+        running_time[t] = ktiming_diff_usec(&begin, &end);
 
         if (check) {
             int success = 1;
