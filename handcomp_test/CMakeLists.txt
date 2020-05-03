@@ -11,7 +11,10 @@ endif ()
 #===============================================================================
 set(UTIL getoptions.c ktiming.c)
 
-set(TIMING_COUNT 1)
+if (NOT DEFINED TIMING_COUNT)
+    set(TIMING_COUNT 1)
+endif()
+
 add_compile_definitions(TIMING_COUNT=${TIMING_COUNT})
 
 add_compile_options(-Wall -fno-omit-frame-pointer ${HANDCOMP_COMPILE_OPT})
