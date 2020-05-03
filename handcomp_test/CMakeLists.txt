@@ -11,7 +11,10 @@ endif ()
 #===============================================================================
 set(UTIL getoptions.c ktiming.c)
 
-set(TIMING_COUNT 1)
+if(NOT DEFINED TIMING_COUNT)
+    set(TIMING_COUNT 1)
+endif()
+
 add_compile_definitions(TIMING_COUNT=${TIMING_COUNT})
 
 add_compile_options(-Wall -fno-omit-frame-pointer ${HANDCOMP_COMPILE_OPT})
@@ -33,6 +36,9 @@ target_link_libraries(nqueens ${LIBRARIES})
 
 add_executable(cilksort cilksort.c ${UTIL})
 target_link_libraries(cilksort ${LIBRARIES})
+
+add_executable(daxpy daxpy.c ${UTIL})
+target_link_libraries(daxpy ${LIBRARIES})
 
 add_custom_target(handcomp_check
         echo \"fib\(26\)\"
