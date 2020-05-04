@@ -37,6 +37,9 @@ target_link_libraries(nqueens ${LIBRARIES})
 add_executable(cilksort cilksort.c ${UTIL})
 target_link_libraries(cilksort ${LIBRARIES})
 
+add_executable(daxpy daxpy.c ${UTIL})
+target_link_libraries(daxpy ${LIBRARIES})
+
 add_executable(dynamic_for dynamic_for.c ${UTIL})
 target_link_libraries(dynamic_for ${LIBRARIES})
 

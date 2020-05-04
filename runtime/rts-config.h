@@ -4,7 +4,10 @@
 #define __CILKRTS_VERSION 0x0
 #define __CILKRTS_ABI_VERSION 0x1u
 
+#ifndef CILK_DEBUG
 #define CILK_DEBUG 1
+#endif
+
 #define CILK_STATS 0
 
 #define CILK_CACHE_LINE 64
