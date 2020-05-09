@@ -168,6 +168,12 @@ if(CHEETAH_INCLUDE_TESTS)
   set(CHEETAH_ENABLE_SHARED ON)
 endif()
 
+if (CMAKE_BUILD_TYPE STREQUAL Release)
+  add_compile_definitions(CILK_DEBUG=0)
+else()
+  add_compile_definitions(CILK_DEBUG=1)
+endif()
+
 include_directories(runtime)
 
 # Add source code. This also contains all of the logic for deciding linker flags

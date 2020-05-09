@@ -30,9 +30,6 @@ endif()
 
 add_flags_if_supported(-fPIC)
 
-if (CMAKE_BUILD_TYPE EQUAL "RELEASE")
-    add_compile_definitions(CILK_DEBUG=0)
-endif()
 
 # Build the shared library.
 if (CHEETAH_ENABLE_SHARED)
