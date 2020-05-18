@@ -165,7 +165,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CHEETAH_C_FLAGS}")
 
 if(CHEETAH_INCLUDE_TESTS)
   # handcomp tests use the shared library
-  set(CHEETAH_ENABLE_SHARED ON)
+  set(CHEETAH_ENABLE_STATIC ON)
 endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL Release)
@@ -181,7 +181,6 @@ include_directories(runtime)
 add_subdirectory(runtime)
 
 if (CHEETAH_INCLUDE_TESTS)
-  # TODO: Set up CMake for Cheetah tests.
   add_subdirectory(handcomp_test)
   add_subdirectory(bench)
 endif()

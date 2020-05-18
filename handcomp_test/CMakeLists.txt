@@ -1,10 +1,8 @@
-# <UNTESTED>
 get_directory_property(hasParent PARENT_DIRECTORY)
 if (NOT hasParent)
-    set(CHEETAH_INCLUDE_TESTS FALSE)
-    add_directory(..)
+    message(FATAL_ERROR "Cannot build handcomp_test standalone.
+    Please build the parent directory with CHEETAH_INCLUDE_TESTS=ON")
 endif ()
-# </UNTESTED>
 
 #===============================================================================
 # Common settings and options
@@ -19,7 +17,7 @@ add_compile_definitions(TIMING_COUNT=${TIMING_COUNT})
 
 add_compile_options(-Wall -fno-omit-frame-pointer ${HANDCOMP_COMPILE_OPT})
 
-set(LIBRARIES cheetah_shared rt pthread m)
+set(LIBRARIES cheetah_static rt pthread m)
 
 #===============================================================================
 # Executables

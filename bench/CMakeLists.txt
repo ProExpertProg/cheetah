@@ -1,10 +1,7 @@
-# <UNTESTED>
 get_directory_property(hasParent PARENT_DIRECTORY)
 if (NOT hasParent)
-    set(CHEETAH_INCLUDE_TESTS FALSE)
-    add_directory(..)
+    message(FATAL_ERROR "Cannot build bench standalone.\nPlease build the parent directory with CHEETAH_INCLUDE_TESTS=ON")
 endif ()
-# </UNTESTED>
 
 #===============================================================================
 # Common settings and options
@@ -16,7 +13,7 @@ add_compile_definitions(TIMING_COUNT=${TIMING_COUNT})
 
 add_compile_options(-O3 -fcilkplus -ftapir=cilkr -fno-exceptions ${BENCH_COMPILE_OPT})
 
-set(LIBRARIES cheetah_shared rt pthread m dl)
+set(LIBRARIES cheetah_static rt pthread m dl)
 
 #===============================================================================
 # Executables
