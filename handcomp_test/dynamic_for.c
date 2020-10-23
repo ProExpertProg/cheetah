@@ -28,32 +28,24 @@
 static void __attribute__ ((noinline)) daxpy_loop_helper(double *y, const double *x, double a) {
     __uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
-    __cilkrts_init_inner_loop_frame(&inner_lf);
+    __cilkrts_enter_inner_loop_frame(&inner_lf);
 
-    __cilkrts_iteration_return status = __cilkrts_grab_iteration(&inner_lf, &i);
-    while (status != FAIL) {
-        __cilkrts_enter_inner_loop_frame(&inner_lf);
-        if (status != SUCCESS_LAST_ITERATION) {
-            __cilkrts_detach(&inner_lf.sf);
-            // push the parent loop_frame to the deque
-        }
+    __cilkrts_iteration_return status = __cilkrts_grab_first_iteration(&inner_lf, &i);
+    if (status == SUCCESS_ITERATION) {
+        __cilkrts_detach(&inner_lf.sf); // push the parent loop_frame to the deque
 
-        // LOOP BODY
-        y[i] += a * x[i];
-        // END OF LOOP BODY
-
-        __cilkrts_pop_frame(&inner_lf.sf);
-        __cilkrts_leave_frame(&inner_lf.sf);
-        // if this returns, we've obtained the loop frame
-
-        if(status != SUCCESS_LAST_ITERATION) {
-            status = __cilkrts_grab_iteration(&inner_lf, &i);
-        } else {
-            break; // if we were in our last iteration, we're done
-        }
+        do {
+            // LOOP BODY
+            y[i] += a * x[i];
+            // END OF LOOP BODY
+            status = __cilkrts_pop_loop_frame(&inner_lf, &i);
+        } while (status == SUCCESS_ITERATION);
     }
 
-    // here, we have left the frame and didn't reenter it.
+    // TODO status == SUCCESS_LAST_ITERATION
+
+    __cilkrts_pop_frame(&inner_lf.sf);
+    __cilkrts_leave_frame(&inner_lf.sf);
 }
 
 void daxpy(double *y, double *x, double a, uint64_t n) {
