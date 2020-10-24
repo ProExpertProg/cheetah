@@ -193,7 +193,7 @@ __cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *
     CILK_ASSERT(w, *(w->tail-1) == lf->sf.call_parent);
 
     *index = pLoopFrame->start++;
-    // TODO fence
+    Cilk_membar_StoreLoad(); // TODO correct fence
 
     if(pLoopFrame->start > pLoopFrame->end) {
         pLoopFrame->start--; // TODO could remove -- and ++, that's done for w->tail in THE
