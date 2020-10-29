@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../runtime/cilk2c.h"
 #include "../runtime/scheduler.h"

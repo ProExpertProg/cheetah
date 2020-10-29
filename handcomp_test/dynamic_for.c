@@ -42,8 +42,11 @@ static void __attribute__ ((noinline)) daxpy_loop_helper(double *y, const double
         } while (status == SUCCESS_ITERATION);
     }
 
-    // TODO status == SUCCESS_LAST_ITERATION
-
+    if(status == SUCCESS_LAST_ITERATION) {
+        // LOOP BODY
+        y[i] += a * x[i];
+        // END OF LOOP BODY
+    }
     __cilkrts_pop_frame(&inner_lf.sf);
     __cilkrts_leave_frame(&inner_lf.sf);
 }

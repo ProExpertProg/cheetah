@@ -371,6 +371,9 @@ Closure * Closure_return(__cilkrts_worker *const w, Closure *child) {
         // Case where we are not the leftmost stack.
         CILK_ASSERT(w, parent->fiber_child != child->fiber);
         cilk_fiber_deallocate_to_pool(w, child->fiber);
+
+        // we can never have a most_original_loop_frame on a non-leftmost sibling
+        CILK_ASSERT(w, child->most_original_loop_frame == NULL);
     } else {
         // We are leftmost, pass stack/fiber up to parent.  
         // Thus, no stack/fiber to free.
@@ -388,6 +391,18 @@ Closure * Closure_return(__cilkrts_worker *const w, Closure *child) {
             CILK_ASSERT(w, __cilkrts_is_split(child->frame));
             CILK_ASSERT(w, parent->most_original_loop_frame == NULL); // There can only be one
             parent->most_original_loop_frame = (__cilkrts_loop_frame *) child->frame;
+
+            CILK_ASSERT(w, child->most_original_loop_frame == NULL); // shouldn't be set
+        }
+
+        // we could just be returning from an inner loop frame whose parent was blocked and is the most-original.
+        // that happens in Cilk_exception_handler()
+
+        if (child->most_original_loop_frame) {
+            parent->most_original_loop_frame = child->most_original_loop_frame;
+            __cilkrts_alert(ALERT_LOOP | ALERT_RETURN,
+                            "[%d]: Getting most_orig_lf %p from child %p for parent %p\n",
+                            w->self, child->most_original_loop_frame, child, parent);
         }
     }
 
@@ -450,7 +465,7 @@ Closure * return_value(__cilkrts_worker *const w, Closure *t) {
  *       Cilk_cilk2c_before_return, which destroys the shadow frame and
  *       return back to caller. 
  */
-void Cilk_exception_handler() {
+void Cilk_exception_handler(unsigned int isLoop) {
 
     Closure *t;
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
@@ -471,16 +486,38 @@ void Cilk_exception_handler() {
                    t->status == CLOSURE_RETURNING);
 
     if( w->head > w->tail ) {
-      __cilkrts_alert(ALERT_EXCEPT, "[%d]: (Cilk_exception_handler) this is a steal!\n", w->self);
+        __cilkrts_alert(ALERT_EXCEPT, "[%d]: (Cilk_exception_handler) this is a steal!\n", w->self);
 
-      if(t->status == CLOSURE_RUNNING) {
-        CILK_ASSERT(w, Closure_has_children(t) == 0);
-        t->status = CLOSURE_RETURNING;
-      }
+        if (t->status == CLOSURE_RUNNING) {
+            CILK_ASSERT(w, Closure_has_children(t) == 0);
+            t->status = CLOSURE_RETURNING;
+        }
 
-      Closure_unlock(w, t);
-      deque_unlock_self(w);
-      longjmp_to_runtime(w); // NOT returning back to user code
+        // Perhaps the frame we failed to pop is a Loop Frame that wasn't taken but simply blocked.
+        if (isLoop) {
+            // Here we need to pretend like this loop frame that still exists was completely taken,
+            // but we can't discard it as it will be needed for synchronization
+
+            // before leave, we set the current to the frame we're popping in pop
+            CILK_ASSERT(w, __cilkrts_is_loop(w->current_stack_frame));
+            CILK_ASSERT(w, &w->local_loop_frame->sf == w->current_stack_frame);
+
+            // if dynamic, simply free and we're done
+            if (__cilkrts_is_dynamic(w->current_stack_frame))
+                cilk_internal_free(w, w->current_stack_frame, sizeof(__cilkrts_loop_frame));
+            else {
+                // this is the most-original loop frame. We need to make sure it gets passed to the parent
+                CILK_ASSERT(w, t->most_original_loop_frame == NULL);
+                t->most_original_loop_frame = (__cilkrts_loop_frame *) w->current_stack_frame;
+                __cilkrts_alert(ALERT_LOOP | ALERT_RETURN,
+                                "[%d]: Setting most_orig_lf of closure %p to frame %p\n",
+                                w->self, t, w->current_stack_frame);
+            }
+        }
+
+        Closure_unlock(w, t);
+        deque_unlock_self(w);
+        longjmp_to_runtime(w); // NOT returning back to user code
 
     } else { // not steal, not abort; false alarm
       Closure_unlock(w, t);
@@ -610,6 +647,8 @@ int do_dekker_on(__cilkrts_worker *const w,
 /***
  * promote the child frame of parent to a full closure.
  * Detach the parent and return it.
+ * In the case the frame is a loop frame, complete the stealing protocol
+ * and return NULL on failure.
  *
  * Assumptions: the parent is running on victim, and we own
  * the locks of both parent and deque[victim].
@@ -619,7 +658,7 @@ int do_dekker_on(__cilkrts_worker *const w,
  * In order to promote a child frame to a closure,
  * the parent's frame must be the last in its ready queue.
  *
- * Returns the child. 
+ * Returns the child (or NULL if Loop Frame stealing fails).
  * 
  * ANGE: I don't think this function actually detach the parent.  Someone
  *       calling this function has to do deque_xtract_top on the victim's 
@@ -661,7 +700,13 @@ Closure *promote_child(__cilkrts_worker *const w,
 
     // check whether this is a loop frame that we need to split.
 
-    __cilkrts_loop_frame *new_loop_frame = split_loop_frame(frame_to_steal, w);
+    __cilkrts_loop_frame *newLoopFrame = NULL;
+    __cilkrts_split_lf_result lfResult = split_loop_frame(frame_to_steal, w, &newLoopFrame);
+
+    if (lfResult == FAIL) {
+        decrement_exception_pointer(w, victim_w, cl);
+        return NULL;
+    }
 
     // ANGE: if cl's frame is not set, the top stacklet must contain more 
     // than one frame, because the right-most (oldest) frame must be a spawn
@@ -717,11 +762,13 @@ Closure *promote_child(__cilkrts_worker *const w,
     /* join counter update */
     spawn_parent->join_counter++;
 
-    if (new_loop_frame) {
+    if (lfResult == SUCCESS) {
         // frame_to_steal is split, new_loop_frame could be either
+        CILK_ASSERT(w, newLoopFrame);
         CILK_ASSERT(w, __cilkrts_is_split(frame_to_steal));
 
-        // TODO why passing the closure
+        // TODO why passing the closure - spawn_parent could != cl and
+        //  it's unclear which closure should be locked for this operation
         decrement_exception_pointer(w, victim_w, spawn_parent); // return the boundary back,
         // as the worker is now again allowed to access its (modified) loop frame
 
@@ -729,12 +776,19 @@ Closure *promote_child(__cilkrts_worker *const w,
         // frame_to_steal again, and we're stealing spawn_child. Hence, frame_to_steal is on top,
         // so we don't want to be making a new spawn_parent for it.
         spawn_child->frame = frame_to_steal; // the old LoopFrame.
-        spawn_parent->frame = &new_loop_frame->sf;
 
     } else {
+        // either we have NOT_LOOP_FRAME or SUCCESS_REMOVE, meaning we are taking the whole frame
         (victim_w->head)++;
         // ANGE: we set this frame lazily
         spawn_child->frame = (__cilkrts_stack_frame *) NULL;
+    }
+
+    // the parent still gets the new frame, even if it's taking all iterations
+    // and not restoring exc
+    if (lfResult != NOT_LOOP_FRAME) {
+        CILK_ASSERT(w, newLoopFrame);
+        spawn_parent->frame = &newLoopFrame->sf;
     }
 
     /* insert the closure on the victim processor's deque */
@@ -825,23 +879,29 @@ Closure *Closure_steal(__cilkrts_worker *const w, int victim) {
             case CLOSURE_RUNNING:
                 /* send the exception to the worker */
                 if(do_dekker_on(w, victim_w, cl)) {
-                    __cilkrts_alert(ALERT_STEAL, 
-                            "[%d]: (Closure_steal) can steal from W%d; cl=%p\n", w->self, victim, cl);
+                    __cilkrts_alert(ALERT_STEAL,
+                                    "[%d]: (Closure_steal) can steal from W%d; cl=%p\n", w->self, victim, cl);
+                    /*
+                     * if dekker passes, promote the child to a full closure, 
+                     * and steal the parent
+                     */
+                    child = promote_child(w, victim_w, cl, &res);
+                    if (!child) {
+                        // Loop Frame split failed.
+                        goto give_up;
+                    }
+                    __cilkrts_alert(ALERT_STEAL,
+                                    "[%d]: (Closure_steal) promote gave cl/res/child = %p/%p/%p\n", w->self, cl, res,
+                                    child);
+
+                    // now we're absolutely certain we won't fail
                     fiber = cilk_fiber_allocate_from_pool(w);
                     parent_fiber = cl->fiber;
                     CILK_ASSERT(w, parent_fiber);
                     CILK_ASSERT(w, fiber);
 
-                    /* 
-                     * if dekker passes, promote the child to a full closure, 
-                     * and steal the parent
-                     */
-                    child = promote_child(w, victim_w, cl, &res);
-                    __cilkrts_alert(ALERT_STEAL, 
-                        "[%d]: (Closure_steal) promote gave cl/res/child = %p/%p/%p\n", w->self, cl, res, child);
-
                     /* detach the parent */
-                    if(res == (Closure *) NULL) {
+                    if (res == (Closure *) NULL) {
                         res = deque_xtract_top(w, victim);
                         // ANGE: the top of the deque could have changed in the else case.
                         CILK_ASSERT(w, cl == res);

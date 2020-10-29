@@ -246,7 +246,7 @@ void __cilkrts_leave_frame(__cilkrts_stack_frame * sf) {
                 // optimiation is applicable *ONLY* on i386 and x86_64
         if(__builtin_expect(w->exc > t, 0)) {
             // this may not return if last work item has been stolen
-            Cilk_exception_handler(); 
+            Cilk_exception_handler(__cilkrts_is_inner_loop(sf));
         }
         // CILK_ASSERT(w, *(w->tail) == w->current_stack_frame);
     } else {

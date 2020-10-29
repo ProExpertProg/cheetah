@@ -18,7 +18,7 @@ int Cilk_sync(__cilkrts_worker *const ws,
 
 __attribute__((noreturn)) void Cilk_loop_frame_return();
 void Cilk_set_return(__cilkrts_worker *const ws);
-void Cilk_exception_handler();
+void Cilk_exception_handler(unsigned int isLoop);
 
 __attribute__((noreturn)) void longjmp_to_runtime(__cilkrts_worker * w);
 void worker_scheduler(__cilkrts_worker * ws, Closure * t);

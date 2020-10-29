@@ -5,40 +5,53 @@
 #include "closure.h"
 #include "loop-frames.h"
 #include <string.h>
+#include "membar.h"
 
 // returns the new loop frame on success, NULL on failure
-__cilkrts_loop_frame *split_loop_frame(__cilkrts_stack_frame *frame_to_steal, __cilkrts_worker *w) {
+__cilkrts_split_lf_result
+split_loop_frame(__cilkrts_stack_frame *frame_to_steal, __cilkrts_worker *w, __cilkrts_loop_frame **res_lf) {
     if (__cilkrts_is_loop(frame_to_steal)) {
         __cilkrts_loop_frame *lf = (__cilkrts_loop_frame *) frame_to_steal;
-        uint64_t len = lf->end - lf->start;
-        if (len > 1) {
-            // split the frame in half
 
-            uint64_t mid = lf->start + len / 2;
-            __cilkrts_loop_frame *new_lf = clone_loop_frame(lf, w);
+        // split the frame in half
+        __cilkrts_loop_frame *new_lf = clone_loop_frame(lf, w);
+        __uint64_t start = lf->start;
+        __cilkrts_alert(ALERT_LOOP | ALERT_STEAL, "[%d]: (split_loop_frame) Splitting frame %p [%d:%d] on victim %d in two (new_lf=%p)!\n",
+                        w->self, lf, start, lf->end, lf->sf.worker->self, new_lf);
+        CILK_ASSERT(w, new_lf->end == lf->end);
 
-            __cilkrts_alert(ALERT_LOOP, "[%d]: (split_loop_frame) Splitting frame %p [%d:%d] in two (new_lf=%p)!\n",
-                            w->self, lf, lf->start, lf->end, new_lf);
+        uint64_t mid = (start + lf->end) / 2;
+        new_lf->start = mid;
+        lf->end = mid;
 
-            CILK_ASSERT(w, new_lf->end == lf->end);
-            lf->end = mid;
-            new_lf->start = mid;
+        Cilk_membar_StoreLoad();
 
-
-            // The old frame is now split (it could be split before,
-            // in which case the new one is also split).
-            __cilkrts_set_split(lf);
-            __cilkrts_set_synced(&lf->sf);
-            // Because the thief takes the old closure and new frame,
-            // the old frame goes into a new child closure,
-            // with no outstanding children, so it's synced
-
-            return new_lf;
+        if (lf->start > lf->end) {
+            lf->end = new_lf->end;
+            cilk_internal_free(w, new_lf, sizeof(__cilkrts_loop_frame));
+            return FAIL;
         }
 
-        __cilkrts_alert(ALERT_LOOP, "(split_loop_frame) Stealing the whole loop frame %p [%d:%d]!\n", lf, lf->start, lf->end);
+        // success!
+        // check whether to retract E or remove the Loop Frame
+        int retractExc = lf->start < lf->end;
+
+        __cilkrts_alert(ALERT_LOOP | ALERT_STEAL, "[%d]: (split_loop_frame) Restoring head: %d, mid=%d\n",
+                        w->self, retractExc, mid);
+        // only now we can manipulate flags on the worker's frame
+
+        // The old frame is now split (it could be split before,
+        // in which case the new one is also split).
+        __cilkrts_set_split(lf);
+        __cilkrts_set_synced(&lf->sf);
+        // Because the thief takes the old closure and new frame,
+        // the old frame goes into a new child closure,
+        // with no outstanding children, so it's synced
+
+        *res_lf = new_lf;
+        return retractExc ? SUCCESS : SUCCESS_REMOVE;
     }
-    return NULL;
+    return NOT_LOOP_FRAME;
 }
 
 __cilkrts_loop_frame *
@@ -131,7 +144,7 @@ void sync_loop_frame(__cilkrts_worker *w, Closure *t) {
         cilk_internal_free(w, t->frame, sizeof(__cilkrts_loop_frame));
 
         t->frame = &t->most_original_loop_frame->sf;
-
+        t->most_original_loop_frame = NULL; // we've used this, if the closure gets reused this needs to be cleared.
     }
     // need to set this in case b) or if we just switched to the original
     // - otherwise it's already set and there's no harm.
