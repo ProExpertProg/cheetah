@@ -192,8 +192,7 @@ __cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *
     // safe to read tail as we're the only ones updating it
     CILK_ASSERT(w, *(w->tail-1) == lf->sf.call_parent);
 
-    *index = pLoopFrame->start++;
-    Cilk_membar_StoreLoad(); // TODO correct fence
+    *index = __atomic_fetch_add(&pLoopFrame->start, 1, __ATOMIC_SEQ_CST);
 
     if(pLoopFrame->start > pLoopFrame->end) {
         pLoopFrame->start--; // TODO could remove -- and ++, that's done for w->tail in THE
