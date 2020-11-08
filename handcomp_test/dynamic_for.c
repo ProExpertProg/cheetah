@@ -71,7 +71,7 @@ void daxpy(double *y, double *x, double a, uint64_t n) {
 
     daxpy_loop_helper(y, x, a);
 
-    CILK_ASSERT(w, local_lf()->start == local_lf()->end);
+    CILK_ASSERT(__cilkrts_get_tls_worker(), local_lf()->start == local_lf()->end);
 
     if(__cilkrts_unsynced(&local_lf()->sf)) {
         __cilkrts_save_fp_ctrl_state(&local_lf()->sf);

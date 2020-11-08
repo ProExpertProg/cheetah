@@ -85,8 +85,8 @@ struct __cilkrts_loop_frame {
     __cilkrts_stack_frame sf;
 
     // The indices for our iterations
-    volatile __uint64_t start;
-    volatile __uint64_t end;
+    uint64_t start;
+    uint64_t end;
 };
 
 struct __cilkrts_inner_loop_frame {

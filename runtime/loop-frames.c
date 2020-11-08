@@ -15,18 +15,17 @@ split_loop_frame(__cilkrts_stack_frame *frame_to_steal, __cilkrts_worker *w, __c
 
         // split the frame in half
         __cilkrts_loop_frame *new_lf = clone_loop_frame(lf, w);
-        __uint64_t start = lf->start;
+        __uint64_t start = __atomic_load_n(&lf->start, __ATOMIC_RELAXED);
         __cilkrts_alert(ALERT_LOOP | ALERT_STEAL, "[%d]: (split_loop_frame) Splitting frame %p [%d:%d] on victim %d in two (new_lf=%p)!\n",
                         w->self, lf, start, lf->end, lf->sf.worker->self, new_lf);
         CILK_ASSERT(w, new_lf->end == lf->end);
 
         uint64_t mid = (start + lf->end) / 2;
         new_lf->start = mid;
-        lf->end = mid;
+        __atomic_store_n(&lf->end, mid, __ATOMIC_SEQ_CST);
 
-        Cilk_membar_StoreLoad();
-
-        if (lf->start > lf->end) {
+        start = __atomic_load_n(&lf->start, __ATOMIC_SEQ_CST);
+        if (start > mid) {
             lf->end = new_lf->end;
             cilk_internal_free(w, new_lf, sizeof(__cilkrts_loop_frame));
             return FAIL;

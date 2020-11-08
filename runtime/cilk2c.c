@@ -193,15 +193,19 @@ __cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *
     // safe to read tail as we're the only ones updating it
     CILK_ASSERT(w, *(w->tail-1) == lf->sf.call_parent);
 
-    *index = __sync_fetch_and_add(&pLoopFrame->start, 1);
+    // we just need to make sure that the load of end happens after load of start
+    // need to do more benchmarking to determine best fence
 
-    if(pLoopFrame->start > pLoopFrame->end) {
-        pLoopFrame->start--; // TODO could remove -- and ++, that's done for w->tail in THE
+    uint64_t start = __atomic_load_n(&pLoopFrame->start, __ATOMIC_RELAXED);
+
+    *index = start++;
+    __atomic_store_n(&pLoopFrame->start, start, __ATOMIC_SEQ_CST);
+
+    if (start > __atomic_load_n(&pLoopFrame->end, __ATOMIC_SEQ_CST)) {
         deque_lock_self(w);
-        pLoopFrame->start++;
         // no need for a fence because we now have exclusive access
         // also, the lock already fenced (it should have??)
-        if(pLoopFrame->start > pLoopFrame->end) {
+        if (pLoopFrame->start > __atomic_load_n(&pLoopFrame->end, __ATOMIC_SEQ_CST)) {
             pLoopFrame->start--;
             deque_unlock_self(w);
             return FAIL;
