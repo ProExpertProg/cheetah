@@ -1,17 +1,15 @@
-# <UNTESTED>
 get_directory_property(hasParent PARENT_DIRECTORY)
 if (NOT hasParent)
-    set(CHEETAH_INCLUDE_TESTS FALSE)
-    add_directory(..)
+    message(FATAL_ERROR "Cannot build handcomp_test standalone.
+    Please build the parent directory with CHEETAH_INCLUDE_TESTS=ON")
 endif ()
-# </UNTESTED>
 
 #===============================================================================
 # Common settings and options
 #===============================================================================
 set(UTIL getoptions.c ktiming.c)
 
-if(NOT DEFINED TIMING_COUNT)
+if (NOT DEFINED TIMING_COUNT)
     set(TIMING_COUNT 1)
 endif()
 
@@ -19,7 +17,7 @@ add_compile_definitions(TIMING_COUNT=${TIMING_COUNT})
 
 add_compile_options(-Wall -fno-omit-frame-pointer ${HANDCOMP_COMPILE_OPT})
 
-set(LIBRARIES cheetah_shared rt pthread m)
+set(LIBRARIES cheetah_static rt pthread m)
 
 #===============================================================================
 # Executables
@@ -44,10 +42,10 @@ add_custom_target(handcomp_check
         echo \"fib\(26\)\"
         COMMAND $<TARGET_FILE:fib> --nproc 8 26
         COMMAND echo \"mm_dac\(512\)\"
-        COMMAND $<TARGET_FILE:mm_dac> --nproc 8 -n 512
+        COMMAND $<TARGET_FILE:mm_dac> --nproc 8 -n 512 -c
         COMMAND echo \"nqueens\(10\)\"
         COMMAND $<TARGET_FILE:nqueens> --nproc 8 10
         COMMAND echo \"cilksort\(3000000\)\"
-        COMMAND $<TARGET_FILE:cilksort> --nproc 8 -n 3000000
+        COMMAND $<TARGET_FILE:cilksort> --nproc 8 -n 3000000 -c
         COMMENT "Checking all targets"
         DEPENDS fib mm_dac nqueens cilksort)
