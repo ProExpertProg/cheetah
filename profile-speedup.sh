@@ -1,6 +1,6 @@
 #!/bin/bash
 
-mkdir logs
+mkdir -p "logs"
 
 # file path and name
 file=$1

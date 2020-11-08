@@ -130,11 +130,11 @@ void sync_loop_frame(__cilkrts_worker *w, Closure *t) {
         copy_loop_frame(w, t->most_original_loop_frame, (__cilkrts_loop_frame *) t->frame);
 
         if (t->fiber) {
-            __cilkrts_alert(ALERT_SYNC, "[%d]: (sync_loop_frame) Scenario 2.a), closure %p\n", w->self, t);
+            __cilkrts_alert(ALERT_SYNC | ALERT_LOOP, "[%d]: (sync_loop_frame) Scenario 2.a), closure %p\n", w->self, t);
             // in case a), we still haven't freed our fiber
             CILK_ASSERT(w, w->current_stack_frame == t->frame);
         } else {
-            __cilkrts_alert(ALERT_SYNC, "[%d]: (sync_loop_frame) Scenario 2.b), closure %p\n", w->self, t);
+            __cilkrts_alert(ALERT_SYNC | ALERT_LOOP, "[%d]: (sync_loop_frame) Scenario 2.b), closure %p\n", w->self, t);
             // in case b), we've already freed our fiber, so we're returning from the child
             // hence, current_stack_frame is NULL
 

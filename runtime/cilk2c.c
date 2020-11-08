@@ -107,9 +107,10 @@ __cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_f
 
     if (pLoopFrame->start > pLoopFrame->end) {
         __cilkrts_alert(ALERT_LOOP, "[%d]: (__cilkrts_grab_iteration) Loop ending at i=%i\n", w->self, *index);
+        pLoopFrame->start--;
         return FAIL;
     } else if (pLoopFrame->start == pLoopFrame->end) {
-        __cilkrts_alert(ALERT_LOOP, "[%d]: (__cilkrts_grab_iteration) Last iteration with i=%i\n", w->self, *index);
+        __cilkrts_alert(ALERT_LOOP, "[%d]: (__cilkrts_grab_iteration) Only iteration with i=%i\n", w->self, *index);
         return SUCCESS_LAST_ITERATION;
     } else {
         return SUCCESS_ITERATION;

@@ -71,6 +71,8 @@ void daxpy(double *y, double *x, double a, uint64_t n) {
 
     daxpy_loop_helper(y, x, a);
 
+    CILK_ASSERT(w, local_lf()->start == local_lf()->end);
+
     if(__cilkrts_unsynced(&local_lf()->sf)) {
         __cilkrts_save_fp_ctrl_state(&local_lf()->sf);
         if(!__builtin_setjmp(local_lf()->sf.ctx)) {
@@ -93,6 +95,9 @@ int usage(void) {
 const char *specifiers[] = {"-n", "-c", "-h", 0};
 int opt_types[] = {LONGARG, BOOLARG, BOOLARG, 0};
 
+// easier debugging
+double *x, *y;
+
 int cilk_main(int argc, char *argv[]) {
 
     double a = 3.0;
@@ -106,8 +111,8 @@ int cilk_main(int argc, char *argv[]) {
         return usage();
     }
 
-    double *y = calloc(N, sizeof(double));
-    double *x = malloc(N * sizeof(double));
+    y = calloc(N, sizeof(double));
+    x = malloc(N * sizeof(double));
 
     srand(0);
 

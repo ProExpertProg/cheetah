@@ -508,11 +508,18 @@ void Cilk_exception_handler(unsigned int isLoop) {
             else {
                 // this is the most-original loop frame. We need to make sure it gets passed to the parent
                 CILK_ASSERT(w, t->most_original_loop_frame == NULL);
+
+                w->current_stack_frame->call_parent = NULL;
+
                 t->most_original_loop_frame = (__cilkrts_loop_frame *) w->current_stack_frame;
                 __cilkrts_alert(ALERT_LOOP | ALERT_RETURN,
                                 "[%d]: Setting most_orig_lf of closure %p to frame %p\n",
                                 w->self, t, w->current_stack_frame);
             }
+
+            // We're returning from an inner loop frame
+            // and we want to be consistent with return from a loop frame
+            w->current_stack_frame = NULL;
         }
 
         Closure_unlock(w, t);
