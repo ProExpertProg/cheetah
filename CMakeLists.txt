@@ -166,6 +166,9 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CHEETAH_C_FLAGS}")
 if(CHEETAH_INCLUDE_TESTS)
   # handcomp tests use the static library
   set(CHEETAH_ENABLE_STATIC ON)
+  set(CHEETAH_ENABLE_SHARED ON)
+  # handcomp tests use the static library
+  set(CHEETAH_ENABLE_STATIC ON)
 endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL Release)

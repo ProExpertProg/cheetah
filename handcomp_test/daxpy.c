@@ -22,9 +22,9 @@
 
 typedef void (*ForBody)(uint64_t i, void *data);
 
-static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t high, ForBody body, void *data, uint64_t grainsize);
+static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t high, void *data, uint64_t grainsize);
 
-void cilk_loop_recursive(uint64_t low, uint64_t high, ForBody body, void *data, uint64_t grainsize) {
+void cilk_loop_recursive(uint64_t low, uint64_t high, void *data, uint64_t grainsize) {
 
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
@@ -37,7 +37,7 @@ void cilk_loop_recursive(uint64_t low, uint64_t high, ForBody body, void *data, 
         // cilk_spawn cilk_loop_helper()
         __cilkrts_save_fp_ctrl_state(&sf);
         if(!__builtin_setjmp(sf.ctx)) {
-            cilk_loop_helper(low, mid, body, data, grainsize);
+            cilk_loop_helper(low, mid, data, grainsize);
         }
 
         low = mid;
@@ -45,7 +45,11 @@ void cilk_loop_recursive(uint64_t low, uint64_t high, ForBody body, void *data, 
     }
 
     for (int i = low; i < high; ++i) {
-        body(i, data);
+        // body
+        double *y = *((double **) data);
+        double *x = *(((double **) data) + 1);
+        double a = **(((double **) data) + 2);
+        y[i] += a * x[i];
     }
 
     /* cilk_sync */
@@ -62,20 +66,13 @@ void cilk_loop_recursive(uint64_t low, uint64_t high, ForBody body, void *data, 
 }
 
 // we cannot inline this function because of local variables
-static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t high, ForBody body, void *data, uint64_t grainsize) {
+static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t high, void *data, uint64_t grainsize) {
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame_fast(&sf);
     __cilkrts_detach(&sf);
-    cilk_loop_recursive(low, high, body, data, grainsize);
+    cilk_loop_recursive(low, high, data, grainsize);
     __cilkrts_pop_frame(&sf);
     __cilkrts_leave_frame(&sf);
-}
-
-void daxpy_loop_body(uint64_t i, void *data) {
-    double *y = *((double **) data);
-    double *x = *(((double **) data) + 1);
-    double a = **(((double **) data) + 2);
-    y[i] += a * x[i];
 }
 
 
@@ -85,7 +82,7 @@ void daxpy(double *y, double *x, double a, uint64_t n) {
     data[1] = x;
     data[2] = &a;
 
-    cilk_loop_recursive(0, n, daxpy_loop_body, data, 1);
+    cilk_loop_recursive(0, n, data, 1);
 }
 
 int usage(void) {
