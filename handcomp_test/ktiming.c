@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 #define USEC_TO_SEC(x) ((double)x*1.0e-9)
 
@@ -52,43 +53,64 @@ clockmark_t ktiming_getmark(void) {
     return nanos;
 }
 
-uint64_t ktiming_diff_usec(const clockmark_t* const 
+uint64_t ktiming_diff_usec(const clockmark_t* const
                            start, const clockmark_t* const end) {
     return *end - *start;
 }
 
-double ktiming_diff_sec(const clockmark_t* const start, 
+double ktiming_diff_sec(const clockmark_t* const start,
                        const clockmark_t* const end) {
     return ((double)ktiming_diff_usec(start, end)) / 1000000000.0f;
 }
 
-static void 
+int cmp_uint64_t(const void *a, const void *b) {
+    return (int) (*(uint64_t *) a - *(uint64_t *) b);
+}
+
+static void
 print_runtime_helper(uint64_t *usec_elapsed, int size, int summary) {
 
-    int i; 
+    int i;
     uint64_t total = 0;
-    double ave, std_dev = 0, dev_sq_sum = 0;
+    double ave, std_dev = 0, dev_sq_sum = 0, median, min_t = usec_elapsed[0];
 
     for (i = 0; i < size; i++) {
         total += usec_elapsed[i];
         if(!summary) {
-            printf("Running time %d: %gs\n", (i + 1), USEC_TO_SEC(usec_elapsed[i]));
+            printf("Running time %d: %g s\n", (i + 1), USEC_TO_SEC(usec_elapsed[i]));
         }
     }
-    ave = total / size;
-    
+    ave = (double)total / size;
+
     if( size > 1 ) {
         for (i = 0; i < size; i++) {
-            dev_sq_sum += ( (ave - (double)usec_elapsed[i]) * 
+            dev_sq_sum += ( (ave - (double)usec_elapsed[i]) *
                             (ave - (double)usec_elapsed[i]) );
+
+            if(min_t > usec_elapsed[i]) {
+                min_t = usec_elapsed[i];
+            }
         }
-        std_dev = dev_sq_sum / (size-1);
+        std_dev = sqrt(dev_sq_sum / (size-1));
     }
 
-    printf("Running time average: %g s\n", USEC_TO_SEC(ave));
+    qsort(usec_elapsed, TIMING_COUNT, sizeof(double), cmp_uint64_t);
+
+    int mid_i = TIMING_COUNT / 2;
+
+    if (TIMING_COUNT % 2) {
+        median = usec_elapsed[mid_i];
+    } else {
+        median = (usec_elapsed[mid_i - 1] + usec_elapsed[mid_i]) / 2.0;
+    }
+
+    printf("\nRunning time average: %g s\n", USEC_TO_SEC(ave));
+    printf("Running time median:  %g s\n", USEC_TO_SEC(median));
+    printf("Running time minimum: %g s\n\n", USEC_TO_SEC(min_t));
+
     if( std_dev != 0 ) {
-        printf( "Std. dev: %g s (%2.3f%%)\n", 
-                USEC_TO_SEC(std_dev), 100.0*USEC_TO_SEC(std_dev/ave) );
+        printf( "Std. dev: %g s (%2.3f%%)\n",
+                USEC_TO_SEC(std_dev), 100.0*std_dev/ave);
     }
 }
 

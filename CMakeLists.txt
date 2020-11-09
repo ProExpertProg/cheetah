@@ -167,6 +167,14 @@ if(CHEETAH_INCLUDE_TESTS)
   # handcomp tests use the static library
   set(CHEETAH_ENABLE_STATIC ON)
   set(CHEETAH_ENABLE_SHARED ON)
+  # handcomp tests use the static library
+  set(CHEETAH_ENABLE_STATIC ON)
+endif()
+
+if (CMAKE_BUILD_TYPE STREQUAL Release)
+  add_compile_definitions(CILK_DEBUG=0)
+else()
+  add_compile_definitions(CILK_DEBUG=1)
 endif()
 
 include_directories(runtime)
@@ -176,7 +184,6 @@ include_directories(runtime)
 add_subdirectory(runtime)
 
 if (CHEETAH_INCLUDE_TESTS)
-  # TODO: Set up CMake for Cheetah tests.
   add_subdirectory(handcomp_test)
   add_subdirectory(bench)
 endif()
