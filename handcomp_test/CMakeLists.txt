@@ -29,7 +29,7 @@ target_link_libraries(fib ${LIBRARIES})
 add_executable(mm_dac mm_dac.c ${UTIL})
 target_link_libraries(mm_dac ${LIBRARIES})
 
-add_executable(nqueens nqueens.c ${UTIL})
+add_executable(nqueens nqueens.c nqueens_spawn.c ${UTIL})
 target_link_libraries(nqueens ${LIBRARIES})
 
 add_executable(cilksort cilksort.c ${UTIL})
@@ -38,8 +38,14 @@ target_link_libraries(cilksort ${LIBRARIES})
 add_executable(daxpy daxpy.c ${UTIL})
 target_link_libraries(daxpy ${LIBRARIES})
 
-add_executable(dynamic_for dynamic_for.c ${UTIL})
-target_link_libraries(dynamic_for ${LIBRARIES})
+add_executable(daxpy_loop_frames daxpy_loop_frames.c ${UTIL})
+target_link_libraries(daxpy_loop_frames ${LIBRARIES})
+
+add_executable(nqueens_loop_dc nqueens.c nqueens_loop.c cilk_for.c ${UTIL})
+target_link_libraries(nqueens_loop_dc ${LIBRARIES})
+
+add_executable(nqueens_loop_lf nqueens.c nqueens_loop.c cilk_for_lf.c ${UTIL})
+target_link_libraries(nqueens_loop_lf ${LIBRARIES})
 
 add_custom_target(handcomp_check
         echo \"fib\(26\)\"
