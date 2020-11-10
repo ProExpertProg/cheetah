@@ -30,7 +30,8 @@ lscpu >> $raw_output
 function extract_timing {
   input=$1
   name=$2
-  echo "$input" | grep -Po "$name\K[0-9.]*"
+  # need to capture scientific notation
+  echo "$input" | grep -Po "$name\K[0-9.]+(?:e[-+]?\d+)?"
 }
 
 # start our loop for data collection

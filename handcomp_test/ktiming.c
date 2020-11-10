@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 #define USEC_TO_SEC(x) ((double)x*1.0e-9)
 
@@ -76,10 +77,10 @@ print_runtime_helper(uint64_t *usec_elapsed, int size, int summary) {
     for (i = 0; i < size; i++) {
         total += usec_elapsed[i];
         if(!summary) {
-            printf("Running time %d: %gs\n", (i + 1), USEC_TO_SEC(usec_elapsed[i]));
+            printf("Running time %d: %g s\n", (i + 1), USEC_TO_SEC(usec_elapsed[i]));
         }
     }
-    ave = total / size;
+    ave = (double)total / size;
 
     if( size > 1 ) {
         for (i = 0; i < size; i++) {
