@@ -984,8 +984,8 @@ longjmp_to_user_code(__cilkrts_worker * w, Closure *t) {
         // the SP(sf) has been updated with the right orig_rsp already
         CILK_ASSERT(w, t->orig_rsp == NULL);
 
-        __cilkrts_alert(ALERT_SYNC, "[%d]: provably good steal, BP/SP: %p/%p\n",
-                        w->self, FP(sf), SP(sf));
+        __cilkrts_alert(ALERT_SYNC, "[%d]: provably good steal, BP/SP/PC: %p/%p/%p\n",
+                        w->self, FP(sf), SP(sf), PC(sf));
 
         if (__cilkrts_is_loop(sf) && __cilkrts_is_split(sf)) {
             // a provably good steal of a split frame means that this is

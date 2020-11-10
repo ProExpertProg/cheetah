@@ -191,11 +191,13 @@ __cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *
     __cilkrts_loop_frame *pLoopFrame = (__cilkrts_loop_frame *) lf->sf.call_parent;
 
     // safe to read tail as we're the only ones updating it
-    CILK_ASSERT(w, *(w->tail-1) == lf->sf.call_parent);
+    // either:
+    // - we're at the boundary of the stack (we stole something nested and are now walking back up,
+    //   with access to the loop frame as but not on our deque (not ever)
+    // - the loop frame is on our deque, whether we have access to it or not
+    CILK_ASSERT(w, w->tail == w->l->shadow_stack || *(w->tail-1) == lf->sf.call_parent);
 
-    // we just need to make sure that the load of end happens after load of start
-    // need to do more benchmarking to determine best fence
-
+    // we just need to make sure that the load of end happens after store of start
     uint64_t start = __atomic_load_n(&pLoopFrame->start, __ATOMIC_RELAXED);
 
     *index = start++;
@@ -205,7 +207,7 @@ __cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *
         deque_lock_self(w);
         // no need for a fence because we now have exclusive access
         // also, the lock already fenced (it should have??)
-        if (pLoopFrame->start > __atomic_load_n(&pLoopFrame->end, __ATOMIC_SEQ_CST)) {
+        if (start > __atomic_load_n(&pLoopFrame->end, __ATOMIC_SEQ_CST)) {
             pLoopFrame->start--;
             deque_unlock_self(w);
             return FAIL;
@@ -270,6 +272,7 @@ void __cilkrts_leave_frame(__cilkrts_stack_frame * sf) {
     }
 }
 
+// lf != w->current_stack_frame because we just executed pop
 void __cilkrts_leave_loop_frame(__cilkrts_loop_frame * lf) {
 
     __cilkrts_worker *w = lf->sf.worker;

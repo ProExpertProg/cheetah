@@ -106,7 +106,9 @@ static void copy_loop_frame(__cilkrts_worker *w, __cilkrts_loop_frame *original,
 
     CILK_ASSERT(w, original->start == original->end);
     CILK_ASSERT(w, current->start == current->end);
-    CILK_ASSERT(w, current->end != original->end);
+
+    // if current was stolen from original when original was empty, their ends could match
+
     // we don't care about start and end, they aren't used anymore.
 }
 
