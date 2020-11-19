@@ -47,6 +47,21 @@ target_link_libraries(nqueens_loop_dc ${LIBRARIES})
 add_executable(nqueens_loop_lf nqueens.c nqueens_loop.c cilk_for_lf.c ${UTIL})
 target_link_libraries(nqueens_loop_lf ${LIBRARIES})
 
+add_executable(mtrans_dc mtrans.c cilk_for.c ${UTIL})
+target_link_libraries(mtrans_dc ${LIBRARIES})
+add_executable(mtrans_lf mtrans.c cilk_for_lf.c ${UTIL})
+target_link_libraries(mtrans_lf ${LIBRARIES})
+
+add_executable(mmdac_loop_dc mm_dac_loop.c cilk_for.c ${UTIL})
+target_link_libraries(mmdac_loop_dc ${LIBRARIES})
+add_executable(mmdac_loop_lf mm_dac_loop.c cilk_for_lf.c ${UTIL})
+target_link_libraries(mmdac_loop_lf ${LIBRARIES})
+
+add_executable(mmul_loop_dc mmul_loop.c cilk_for.c ${UTIL})
+target_link_libraries(mmul_loop_dc ${LIBRARIES})
+add_executable(mmul_loop_lf mmul_loop.c cilk_for_lf.c ${UTIL})
+target_link_libraries(mmul_loop_lf ${LIBRARIES})
+
 add_custom_target(handcomp_check
         echo \"fib\(26\)\"
         COMMAND $<TARGET_FILE:fib> --nproc 8 26
