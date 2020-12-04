@@ -25,7 +25,7 @@
 
 
 // we cannot inline this function because of local variables
-static void __attribute__ ((noinline)) daxpy_loop_helper(double *y, const double *x, double a) {
+static void __attribute__ ((noinline)) daxpy_loop_helper(double *y, const double *x, double a, uint64_t grainsize) {
     __uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
     __cilkrts_enter_inner_loop_frame(&inner_lf);
@@ -36,7 +36,9 @@ static void __attribute__ ((noinline)) daxpy_loop_helper(double *y, const double
 
         do {
             // LOOP BODY
-            y[i] += a * x[i];
+            for (uint64_t j = i * grainsize; j < (i + 1) * grainsize; j++) {
+                y[j] += a * x[j];
+            }
             // END OF LOOP BODY
             status = __cilkrts_pop_loop_frame(&inner_lf, &i);
         } while (status == SUCCESS_ITERATION);
@@ -44,17 +46,20 @@ static void __attribute__ ((noinline)) daxpy_loop_helper(double *y, const double
 
     if(status == SUCCESS_LAST_ITERATION) {
         // LOOP BODY
-        y[i] += a * x[i];
+        for (uint64_t j = i * grainsize; j < (i + 1) * grainsize; j++) {
+            y[j] += a * x[j];
+        }
         // END OF LOOP BODY
     }
     __cilkrts_pop_frame(&inner_lf.sf);
     __cilkrts_leave_frame(&inner_lf.sf);
 }
 
-void daxpy(double *y, double *x, double a, uint64_t n) {
+void daxpy(double *y, double *x, double a, uint64_t n, uint64_t grainsize) {
 
     __cilkrts_loop_frame lf;
-    __cilkrts_enter_loop_frame(&lf, 0, n);
+    uint64_t end = n / grainsize, rem = n % grainsize;
+    __cilkrts_enter_loop_frame(&lf, 0, end);
 
     // cilk_for(int i = 0; i < n; ++i) {
     __cilkrts_save_fp_ctrl_state(&lf.sf);
@@ -65,17 +70,15 @@ void daxpy(double *y, double *x, double a, uint64_t n) {
 
         __cilkrts_get_tls_worker()->local_loop_frame = &lf;
 
-    } else {
-
     }
 
-    daxpy_loop_helper(y, x, a);
+    daxpy_loop_helper(y, x, a, grainsize);
 
     CILK_ASSERT(__cilkrts_get_tls_worker(), local_lf()->start == local_lf()->end);
 
     if(__cilkrts_unsynced(&local_lf()->sf)) {
         __cilkrts_save_fp_ctrl_state(&local_lf()->sf);
-        if(!__builtin_setjmp(local_lf()->sf.ctx)) {
+        if (!__builtin_setjmp(local_lf()->sf.ctx)) {
             __cilkrts_sync(&local_lf()->sf);
         }
     }
@@ -84,16 +87,20 @@ void daxpy(double *y, double *x, double a, uint64_t n) {
     __cilkrts_leave_loop_frame(local_lf());
 
     //outer loop frame end scope
+
+    for (uint64_t i = n - rem; i < n; ++i) {
+        y[i] += a * x[i];
+    }
 }
 
 int usage(void) {
     fprintf(stderr,
-            "\nUsage: dynamic_for [-n size] [-c] [-h]\n\n");
+            "\nUsage: daxpy [-n size] [-c] [-h] [-g grainsize]\n\n");
     return -1;
 }
 
-const char *specifiers[] = {"-n", "-c", "-h", 0};
-int opt_types[] = {LONGARG, BOOLARG, BOOLARG, 0};
+const char *specifiers[] = {"-n", "-c", "-g", "-h", 0};
+int opt_types[] = {LONGARG, BOOLARG, LONGARG, BOOLARG, 0};
 
 // easier debugging
 double *x, *y;
@@ -103,9 +110,10 @@ int cilk_main(int argc, char *argv[]) {
     double a = 3.0;
 
     uint64_t N = 1000000;
+    uint64_t grainsize = 1;
     int help = 0, check = 0;
 
-    get_options(argc, argv, specifiers, opt_types, &N, &check, &help);
+    get_options(argc, argv, specifiers, opt_types, &N, &check, &grainsize, &help);
 
     if (help) {
         return usage();
@@ -125,7 +133,7 @@ int cilk_main(int argc, char *argv[]) {
 
     for(int t = 0; t < TIMING_COUNT; t++) {
         begin = ktiming_getmark();
-        daxpy(y, x, a, N);
+        daxpy(y, x, a, N, grainsize);
         end = ktiming_getmark();
         running_time[t] = ktiming_diff_usec(&begin, &end);
 

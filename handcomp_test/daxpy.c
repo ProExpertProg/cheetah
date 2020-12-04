@@ -22,9 +22,13 @@
 
 typedef void (*ForBody)(uint64_t i, void *data);
 
+typedef struct {
+    double *y, *x, a;
+} data;
+
 static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t high, void *data, uint64_t grainsize);
 
-void cilk_loop_recursive(uint64_t low, uint64_t high, void *data, uint64_t grainsize) {
+void cilk_loop_recursive(uint64_t low, uint64_t high, void *d, uint64_t grainsize) {
 
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
@@ -37,7 +41,7 @@ void cilk_loop_recursive(uint64_t low, uint64_t high, void *data, uint64_t grain
         // cilk_spawn cilk_loop_helper()
         __cilkrts_save_fp_ctrl_state(&sf);
         if(!__builtin_setjmp(sf.ctx)) {
-            cilk_loop_helper(low, mid, data, grainsize);
+            cilk_loop_helper(low, mid, d, grainsize);
         }
 
         low = mid;
@@ -46,10 +50,8 @@ void cilk_loop_recursive(uint64_t low, uint64_t high, void *data, uint64_t grain
 
     for (int i = low; i < high; ++i) {
         // body
-        double *y = *((double **) data);
-        double *x = *(((double **) data) + 1);
-        double a = **(((double **) data) + 2);
-        y[i] += a * x[i];
+        data *_d = (data *) d;
+        _d->y[i] += _d->a * _d->x[i];
     }
 
     /* cilk_sync */
@@ -75,33 +77,30 @@ static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t h
     __cilkrts_leave_frame(&sf);
 }
 
+void daxpy(double *y, double *x, double a, uint64_t n, uint64_t grainsize) {
+    data d = {.a=a, .x=x, .y=y};
 
-void daxpy(double *y, double *x, double a, uint64_t n) {
-    void * data[3];
-    data[0] = y;
-    data[1] = x;
-    data[2] = &a;
-
-    cilk_loop_recursive(0, n, data, 1);
+    cilk_loop_recursive(0, n, &d, grainsize);
 }
 
 int usage(void) {
     fprintf(stderr,
-            "\nUsage: daxpy [-n size] [-c] [-h]\n\n");
+            "\nUsage: daxpy [-n size] [-c] [-h] [-g grainsize]\n\n");
     return -1;
 }
 
-const char *specifiers[] = {"-n", "-c", "-h", 0};
-int opt_types[] = {LONGARG, BOOLARG, BOOLARG, 0};
+const char *specifiers[] = {"-n", "-c", "-g", "-h", 0};
+int opt_types[] = {LONGARG, BOOLARG, LONGARG, BOOLARG, 0};
 
 int cilk_main(int argc, char *argv[]) {
 
     double a = 3.0;
 
     uint64_t N = 1000000;
+    uint64_t grainsize = 1;
     int help = 0, check = 0;
 
-    get_options(argc, argv, specifiers, opt_types, &N, &check, &help);
+    get_options(argc, argv, specifiers, opt_types, &N, &check, &grainsize, &help);
 
     if (help) {
         return usage();
@@ -121,7 +120,7 @@ int cilk_main(int argc, char *argv[]) {
 
     for(int t = 0; t < TIMING_COUNT; t++) {
         begin = ktiming_getmark();
-        daxpy(y, x, a, N);
+        daxpy(y, x, a, N, grainsize);
         end = ktiming_getmark();
         running_time[t] = ktiming_diff_usec(&begin, &end);
 

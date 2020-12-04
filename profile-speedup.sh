@@ -22,7 +22,7 @@ echo -e "Writing to $raw_output and $csv_output.\n"
 # prepare log and csv
 
 echo "" > "$raw_output"
-echo -e "n,p,average,median,minimum,stddev" > "$csv_output"
+echo -e "n,p,g,average,median,minimum,stddev" > "$csv_output"
 
 # Info on the computer
 lscpu >> $raw_output
@@ -37,19 +37,23 @@ function extract_timing {
 # start our loop for data collection
 for ((n = 100000; n <= 100000000; n*=10)); do
   for ((p = 1; p <= 20; p++)); do
-    output=$(taskset -c 0-19 "$file" --nproc $p -n $n -c)
+    for ((g = 1; g <= 8192; g*=2)); do
+      command="taskset -c 0-19 $file --nproc $p -n $n -c -g $g"
+      output=$($command)
 
-    o="n = $n, p = $p: \n"
-    echo -e "$o"
-    echo -e "$o" >> $raw_output
-    echo "$output" >> $raw_output
+      o="n = $n, p = $p, g = $g: $command\n"
+      echo -e "$o"
+      echo -e "$o" >> $raw_output
+      echo "$output"
+      echo "$output" >> $raw_output
 
-    average=$(extract_timing "$output" "Running time average: ")
-    median=$(extract_timing "$output" "Running time median:  ")
-    minimum=$(extract_timing "$output" "Running time minimum: ")
-    stddev=$(extract_timing "$output" "Std. dev: ")
+      average=$(extract_timing "$output" "Running time average: ")
+      median=$(extract_timing "$output" "Running time median:  ")
+      minimum=$(extract_timing "$output" "Running time minimum: ")
+      stddev=$(extract_timing "$output" "Std. dev: ")
 
-    # append
-    echo -e "$n,$p,$average,$median,$minimum,$stddev" >> "$csv_output"
+      # append
+      echo -e "$n,$p,$g,$average,$median,$minimum,$stddev" >> "$csv_output"
+    done
   done
 done

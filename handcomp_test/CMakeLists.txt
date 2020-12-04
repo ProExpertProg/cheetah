@@ -23,6 +23,9 @@ set(LIBRARIES cheetah_static rt pthread m)
 # Executables
 #===============================================================================
 
+#----------------
+# Spawn-only
+#----------------
 add_executable(fib fib.c ${UTIL})
 target_link_libraries(fib ${LIBRARIES})
 
@@ -35,8 +38,26 @@ target_link_libraries(nqueens ${LIBRARIES})
 add_executable(cilksort cilksort.c ${UTIL})
 target_link_libraries(cilksort ${LIBRARIES})
 
+add_custom_target(handcomp_check
+        echo \"fib\(26\)\"
+        COMMAND $<TARGET_FILE:fib> --nproc 8 26
+        COMMAND echo \"mm_dac\(512\)\"
+        COMMAND $<TARGET_FILE:mm_dac> --nproc 8 -n 512 -c
+        COMMAND echo \"nqueens\(10\)\"
+        COMMAND $<TARGET_FILE:nqueens> --nproc 8 10
+        COMMAND echo \"cilksort\(3000000\)\"
+        COMMAND $<TARGET_FILE:cilksort> --nproc 8 -n 3000000 -c
+        COMMENT "Checking all targets"
+        DEPENDS fib mm_dac nqueens cilksort)
+
+#----------------
+# Loop-only
+#----------------
 add_executable(daxpy daxpy.c ${UTIL})
 target_link_libraries(daxpy ${LIBRARIES})
+
+add_executable(daxpy_serial daxpy_serial.c ${UTIL})
+target_link_libraries(daxpy_serial m)
 
 add_executable(daxpy_loop_frames daxpy_loop_frames.c ${UTIL})
 target_link_libraries(daxpy_loop_frames ${LIBRARIES})
@@ -47,6 +68,9 @@ target_link_libraries(nqueens_loop_dc ${LIBRARIES})
 add_executable(nqueens_loop_lf nqueens.c nqueens_loop.c cilk_for_lf.c ${UTIL})
 target_link_libraries(nqueens_loop_lf ${LIBRARIES})
 
+#----------------
+# Matrices with loops
+#----------------
 add_executable(mtrans_dc mtrans.c cilk_for.c ${UTIL})
 target_link_libraries(mtrans_dc ${LIBRARIES})
 add_executable(mtrans_lf mtrans.c cilk_for_lf.c ${UTIL})
@@ -61,15 +85,3 @@ add_executable(mmul_loop_dc mmul_loop.c cilk_for.c ${UTIL})
 target_link_libraries(mmul_loop_dc ${LIBRARIES})
 add_executable(mmul_loop_lf mmul_loop.c cilk_for_lf.c ${UTIL})
 target_link_libraries(mmul_loop_lf ${LIBRARIES})
-
-add_custom_target(handcomp_check
-        echo \"fib\(26\)\"
-        COMMAND $<TARGET_FILE:fib> --nproc 8 26
-        COMMAND echo \"mm_dac\(512\)\"
-        COMMAND $<TARGET_FILE:mm_dac> --nproc 8 -n 512 -c
-        COMMAND echo \"nqueens\(10\)\"
-        COMMAND $<TARGET_FILE:nqueens> --nproc 8 10
-        COMMAND echo \"cilksort\(3000000\)\"
-        COMMAND $<TARGET_FILE:cilksort> --nproc 8 -n 3000000 -c
-        COMMENT "Checking all targets"
-        DEPENDS fib mm_dac nqueens cilksort)
