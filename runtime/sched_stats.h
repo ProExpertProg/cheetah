@@ -5,8 +5,9 @@
 #include "rts-config.h"
 
 typedef struct __cilkrts_worker __cilkrts_worker;
-
+#ifndef SCHED_STATS
 #define SCHED_STATS CILK_STATS
+#endif
 
 #if SCHED_STATS
 enum timing_type {

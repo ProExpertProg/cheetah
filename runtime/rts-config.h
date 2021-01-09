@@ -8,7 +8,9 @@
 #define CILK_DEBUG 1
 #endif
 
+#ifndef CILK_STATS
 #define CILK_STATS 0
+#endif
 
 #define CILK_CACHE_LINE 64
 #define CILK_CACHE_LINE_PAD  char __dummy[CILK_CACHE_LINE]

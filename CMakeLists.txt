@@ -177,6 +177,12 @@ else()
   add_compile_definitions(CILK_DEBUG=1)
 endif()
 
+if(SCHED_STATS)
+  add_compile_definitions(SCHED_STATS=1)
+else()
+  add_compile_definitions(SCHED_STATS=0)
+endif()
+
 include_directories(runtime)
 
 # Add source code. This also contains all of the logic for deciding linker flags
