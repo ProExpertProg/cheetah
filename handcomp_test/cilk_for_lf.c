@@ -7,7 +7,7 @@
 #include "../runtime/scheduler.h"
 
 // we cannot inline this function because of local variables
-static void __attribute__ ((noinline)) cilk_loop_helper(void *data, ForBody body) {
+static void __attribute__ ((noinline)) cilk_loop_helper(void *data, ForBody body, uint64_t low, uint64_t grainsize) {
     uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
     __cilkrts_enter_inner_loop_frame(&inner_lf);
@@ -17,13 +17,17 @@ static void __attribute__ ((noinline)) cilk_loop_helper(void *data, ForBody body
         __cilkrts_detach(&inner_lf.sf); // push the parent loop_frame to the deque
 
         do {
-            body(i, data);
+            for (uint64_t j = i * grainsize + low; j < (i + 1) * grainsize + low; j++) {
+                body(j, data);
+            }
             status = __cilkrts_pop_loop_frame(&inner_lf, &i);
         } while (status == SUCCESS_ITERATION);
     }
 
     if(status == SUCCESS_LAST_ITERATION) {
-        body(i, data);
+        for (uint64_t j = i * grainsize + low; j < (i + 1) * grainsize + low; j++) {
+            body(j, data);
+        }
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
@@ -38,7 +42,9 @@ static void __attribute__ ((noinline)) cilk_loop_helper(void *data, ForBody body
 void cilk_for(uint64_t low, uint64_t high, void *data, ForBody body, uint64_t grainsize) {
 
     __cilkrts_loop_frame lf;
-    __cilkrts_enter_loop_frame(&lf, low, high);
+    uint64_t n = high - low;
+    uint64_t end = n / grainsize, rem = n % grainsize;
+    __cilkrts_enter_loop_frame(&lf, 0, end);
 
     // cilk_for(int i = low; i < high; ++i) {
     __cilkrts_save_fp_ctrl_state(&lf.sf);
@@ -51,19 +57,23 @@ void cilk_for(uint64_t low, uint64_t high, void *data, ForBody body, uint64_t gr
 
     }
 
-    cilk_loop_helper(data, body);
+    cilk_loop_helper(data, body, low, grainsize);
 
     WHEN_CILK_DEBUG(__cilkrts_worker * w = __cilkrts_get_tls_worker());
     CILK_ASSERT(w, local_lf()->start == local_lf()->end);
 
-    if(__cilkrts_unsynced(&local_lf()->sf)) {
+    if (__cilkrts_unsynced(&local_lf()->sf)) {
         __cilkrts_save_fp_ctrl_state(&local_lf()->sf);
-        if(!__builtin_setjmp(local_lf()->sf.ctx)) {
+        if (!__builtin_setjmp(local_lf()->sf.ctx)) {
             __cilkrts_sync(&local_lf()->sf);
         }
     }
 
     __cilkrts_pop_frame(&local_lf()->sf);
     __cilkrts_leave_loop_frame(local_lf());
+
+    for (uint64_t i = high - rem; i < high; ++i) {
+        body(i, data);
+    }
 
 }

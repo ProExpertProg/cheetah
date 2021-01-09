@@ -15,7 +15,6 @@ static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t h
     __cilkrts_leave_frame(&sf);
 }
 
-
 void cilk_for(uint64_t low, uint64_t high, void *data, ForBody body, uint64_t grainsize) {
 
     __cilkrts_stack_frame sf;
@@ -37,7 +36,6 @@ void cilk_for(uint64_t low, uint64_t high, void *data, ForBody body, uint64_t gr
     }
 
     for (int i = low; i < high; ++i) {
-        // body
         body(i, data);
     }
 
