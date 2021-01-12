@@ -2,13 +2,32 @@
 
 mkdir -p "logs"
 
-# file path and name
 file=$1
+# default values
+low=${2:-524288}
+high=${3:-134217728}
+step=${4:-16}
+
+# file path and name
 if [[ ! -x "$file" || -d "$file" ]]; then
     echo "Cannot execute \"$file\"."
     exit 2
 fi
 filename=$(basename $file)
+
+# numbers
+re='^[0-9]+$'
+if ! [[ $low =~ $re ]] ; then
+   echo "error: Low not a number" >&2; exit 1
+fi
+
+if ! [[ $high =~ $re ]] ; then
+   echo "error: High not a number" >&2; exit 1
+fi
+
+if ! [[ $step =~ $re ]] ; then
+   echo "error: Step not a number" >&2; exit 1
+fi
 
 #
 timestamp=$(date +%s)
@@ -35,10 +54,10 @@ function extract_timing {
 }
 
 # start our loop for data collection
-for ((n = 100000; n <= 100000000; n*=10)); do
-  for ((p = 1; p <= 20; p++)); do
+for ((n = $low; n <= $high; n*=$step)); do
+  for ((p = 1; p <= 15; p++)); do
     for ((g = 1; g <= 8192; g*=2)); do
-      command="taskset -c 0-19 $file --nproc $p -n $n -c -g $g"
+      command="taskset -c 1-15 $file --nproc $p -n $n -c -g $g"
       output=$($command)
 
       o="n = $n, p = $p, g = $g: $command\n"
