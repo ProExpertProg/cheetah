@@ -53,20 +53,30 @@ add_custom_target(handcomp_check
 #----------------
 # Loop-only
 #----------------
-add_executable(daxpy daxpy.c ${UTIL})
-target_link_libraries(daxpy ${LIBRARIES})
+add_executable(daxpy_dc daxpy.c ${UTIL})
+target_link_libraries(daxpy_dc ${LIBRARIES})
 
 add_executable(daxpy_serial daxpy_serial.c ${UTIL})
 target_link_libraries(daxpy_serial m)
 
-add_executable(daxpy_loop_frames daxpy_loop_frames.c ${UTIL})
-target_link_libraries(daxpy_loop_frames ${LIBRARIES})
+add_executable(daxpy_lf daxpy_loop_frames.c ${UTIL})
+target_link_libraries(daxpy_lf ${LIBRARIES})
 
 add_executable(nqueens_loop_dc nqueens.c nqueens_loop.c cilk_for.c ${UTIL})
 target_link_libraries(nqueens_loop_dc ${LIBRARIES})
 
 add_executable(nqueens_loop_lf nqueens.c nqueens_loop.c cilk_for_lf.c ${UTIL})
 target_link_libraries(nqueens_loop_lf ${LIBRARIES})
+
+add_executable(mandelbrot_dc mandelbrot.c cilk_for.c ${UTIL})
+target_link_libraries(mandelbrot_dc ${LIBRARIES})
+
+add_executable(mandelbrot_lf mandelbrot.c cilk_for_lf.c ${UTIL})
+target_link_libraries(mandelbrot_lf ${LIBRARIES})
+
+add_executable(mandelbrot_serial mandelbrot.c ${UTIL})
+target_compile_definitions(mandelbrot_serial PUBLIC SERIAL=1 cilk_main=main)
+target_link_libraries(mandelbrot_serial m)
 
 #----------------
 # Matrices with loops

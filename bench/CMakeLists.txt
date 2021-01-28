@@ -8,10 +8,20 @@ endif ()
 #===============================================================================
 set(UTIL getoptions.c ktiming.c)
 
-set(TIMING_COUNT 3)
+if (NOT DEFINED TIMING_COUNT)
+    set(TIMING_COUNT 10)
+endif()
+
 add_compile_definitions(TIMING_COUNT=${TIMING_COUNT})
 
-add_compile_options(-O3 -fcilkplus -ftapir=cilkr -fno-exceptions ${BENCH_COMPILE_OPT})
+add_compile_options(
+        -fopencilk -fno-exceptions -ftapir=cheetah
+        -fno-omit-frame-pointer
+        "SHELL:-mllvm -cilk-use-runtime-cilkfor" # prevent de-duplication
+        "SHELL:-mllvm -use-external-abi-functions" # prevent de-duplication
+        #"SHELL:-mllvm -stripmine-coarsen-factor=1" # prevent de-duplication
+        -Rpass=loop-stripmine
+        ${BENCH_COMPILE_OPT})
 
 set(LIBRARIES cheetah_static rt pthread m dl)
 
@@ -48,3 +58,9 @@ target_link_libraries(nqueens_bench ${LIBRARIES})
 
 add_executable(strassen_bench strassen.c ${UTIL})
 target_link_libraries(strassen_bench ${LIBRARIES})
+
+add_executable(mandelbrot_bench mandelbrot.c ${UTIL})
+target_link_libraries(mandelbrot_bench ${LIBRARIES})
+
+add_executable(daxpy_bench daxpy.c ${UTIL})
+target_link_libraries(daxpy_bench ${LIBRARIES})
