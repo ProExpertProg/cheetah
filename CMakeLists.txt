@@ -183,6 +183,10 @@ else()
   add_compile_definitions(SCHED_STATS=0)
 endif()
 
+if(ALERT_LVL)
+  add_compile_definitions(ALERT_LVL=${ALERT_LVL})
+endif()
+
 include_directories(runtime)
 
 # Add source code. This also contains all of the logic for deciding linker flags

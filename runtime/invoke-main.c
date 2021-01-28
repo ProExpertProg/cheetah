@@ -58,7 +58,7 @@ void cleanup_invoke_main(Closure *invoke_main) {
     Closure_destroy_main(invoke_main);
 }
 
-void spawn_cilk_main(int *res, int argc, char * args[]) {
+__attribute__((noinline)) void spawn_cilk_main(int *res, int argc, char * args[]) {
     __cilkrts_stack_frame *sf = alloca(sizeof(__cilkrts_stack_frame));
     __cilkrts_enter_frame_fast(sf);
     __cilkrts_detach(sf);
@@ -162,10 +162,12 @@ int main(int argc, char* argv[]) {
     int ret;
 
     global_state * g = __cilkrts_init(argc, argv);
-    fprintf(stderr, "Cheetah: invoking user main with %d workers.\n", g->options.nproc);
+
+    WHEN_CILK_DEBUG(fprintf(stderr, "Cheetah: invoking user main with %d workers.\n", g->options.nproc));
 
     __cilkrts_run(g);
     ret = g->cilk_main_return;
+    //printf("%x\n", ret);
     __cilkrts_exit(g);
 
     return ret;

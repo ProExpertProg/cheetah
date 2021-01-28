@@ -1,5 +1,17 @@
 set(CHEETAH_LIB_CMAKEFILES_DIR "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}"  PARENT_SCOPE)
 
+# add the __cilkrts_cilk_for_64 ABI function
+if(CILK_FOR_DC)
+    set(CILK_FOR_FILE cilk_abi_cilk_for_dc.c)
+elseif(CILK_FOR_SERIAL)
+    set(CILK_FOR_FILE cilk_abi_cilk_for_serial.c)
+else()
+    set(CILK_FOR_FILE cilk_abi_cilk_for_lf.c)
+endif()
+
+# cannot be omitted
+set_source_files_properties(${CILK_FOR_FILE} PROPERTIES COMPILE_OPTIONS "-fno-omit-frame-pointer")
+
 # Get sources
 set(CHEETAH_SOURCES
   cilk2c.c
@@ -17,6 +29,7 @@ set(CHEETAH_SOURCES
   sched_stats.c
   scheduler.c
   ZERO.c
+  ${CILK_FOR_FILE}
 )
 
 add_library_flags_if(CHEETAH_HAS_PTHREAD_LIB pthread)
