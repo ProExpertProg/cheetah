@@ -35,6 +35,4 @@ void __cilkrts_pop_frame(__cilkrts_stack_frame * sf);
 void __cilkrts_leave_frame(__cilkrts_stack_frame * sf);
 void __cilkrts_leave_loop_frame(__cilkrts_loop_frame * sf);
 int __cilkrts_get_nworkers(void);
-
-__cilkrts_loop_frame * local_lf();
 #endif

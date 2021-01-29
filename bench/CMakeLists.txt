@@ -19,7 +19,7 @@ add_compile_options(
         -fno-omit-frame-pointer
         "SHELL:-mllvm -cilk-use-runtime-cilkfor" # prevent de-duplication
         "SHELL:-mllvm -use-external-abi-functions" # prevent de-duplication
-        #"SHELL:-mllvm -stripmine-coarsen-factor=4" # prevent de-duplication
+        "SHELL:-mllvm -stripmine-coarsen-factor=1" # prevent de-duplication
         #"SHELL:-mllvm -default-runtime-grainsize=256" # prevent de-duplication
         -Rpass=loop-stripmine
         ${BENCH_COMPILE_OPT})

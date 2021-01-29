@@ -314,12 +314,9 @@ void __cilkrts_leave_loop_frame(__cilkrts_loop_frame * lf) {
             // parent back onto the deque
             Cilk_set_return(w);
             CILK_ASSERT(w, w->current_stack_frame->flags & CILK_FRAME_VERSION);
+            CILK_ASSERT(w, !__cilkrts_is_dynamic(&lf->sf));
         }
     }
-}
-
-inline __cilkrts_loop_frame * local_lf(){
-    return __cilkrts_get_tls_worker()->local_loop_frame;
 }
 
 int __cilkrts_get_nworkers(void) {

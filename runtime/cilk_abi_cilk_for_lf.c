@@ -66,6 +66,8 @@ void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, un
 
     __cilkrts_pop_frame(&local_lf()->sf);
     __cilkrts_leave_loop_frame(local_lf());
+
+    CILK_ASSERT(lf.sf.worker, local_lf() == &lf);
     if (rem != 0)
         body(data, count - rem, count);
 }
