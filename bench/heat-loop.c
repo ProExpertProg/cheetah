@@ -30,20 +30,11 @@
 #include <math.h>
 #include <errno.h>
 
-#ifndef TIMING_COUNT
-#define TIMING_COUNT 0
-#endif
-
-#if TIMING_COUNT
-#include "ktiming.h"
-#endif
-
 #include "getoptions.h"
-
-extern int errno;
+#include "ktiming.h"
 
 /* Define ERROR_SUMMARY if you want to check your numerical results */
-#undef ERROR_SUMMARY
+#define ERROR_SUMMARY
 
 #define f(x,y)     (sin(x)*sin(y))
 #define randa(x,t) (0.0)
@@ -151,34 +142,25 @@ int divide(int lb, int ub, double **neww,
 
   int l = 0, r = 0;
 
-  if (ub - lb > leafmaxcol) {
-
-    l = cilk_spawn divide(lb, (ub + lb) / 2, neww, old, mode, timestep);
-    r = divide((ub + lb) / 2, ub, neww, old, mode, timestep);
-    cilk_sync;
-
-    return(l + r);
-
-  } else {
+  cilk_for (int i = lb; i < ub; ++i) {
     switch (mode) {
       case COMP:
         if (timestep % 2)
-          compstripe(neww, old, lb, ub);
+          compstripe(neww, old, i, i+1);
         else
-          compstripe(old, neww, lb, ub);
-        return 1;
+          compstripe(old, neww, i, i+1);
+        break;
 
       case ALLC:
-        allcgrid(neww, old, lb, ub);
-        return 1;
+        allcgrid(neww, old, i, i+1);
+        break;
 
       case INIT:
-        initgrid(old, lb, ub);
-        return 1;
+        initgrid(old, i, i+1);
+        break;
     }
-
-    return 0;
   }
+    return ub-lb;
 }
 
 int heat(void) {
@@ -282,9 +264,9 @@ int usage(void) {
     fprintf(stderr, "   -g #     "
             "granularity (columns per partition)  default: 10\n");   
     fprintf(stderr, "   -nx #    "
-            "total number of columns              default: 4096\n");
+            "total number of columns              default: 2048\n");
     fprintf(stderr, "   -ny #    "
-            "total number of rows                 default: 512\n");
+            "total number of rows                 default: 1024\n");
     fprintf(stderr, "   -nt #    "
             "total time steps                     default: 100\n");
     fprintf(stderr, "   -xu #    lower x coordinate default: 0.0\n");

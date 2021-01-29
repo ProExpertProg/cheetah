@@ -19,7 +19,8 @@ add_compile_options(
         -fno-omit-frame-pointer
         "SHELL:-mllvm -cilk-use-runtime-cilkfor" # prevent de-duplication
         "SHELL:-mllvm -use-external-abi-functions" # prevent de-duplication
-        #"SHELL:-mllvm -stripmine-coarsen-factor=1" # prevent de-duplication
+        #"SHELL:-mllvm -stripmine-coarsen-factor=4" # prevent de-duplication
+        #"SHELL:-mllvm -default-runtime-grainsize=256" # prevent de-duplication
         -Rpass=loop-stripmine
         ${BENCH_COMPILE_OPT})
 
@@ -43,6 +44,9 @@ target_link_libraries(fib_bench ${LIBRARIES})
 
 add_executable(heat_bench heat.c ${UTIL})
 target_link_libraries(heat_bench ${LIBRARIES})
+
+add_executable(heat-loop_bench heat-loop.c ${UTIL})
+target_link_libraries(heat-loop_bench ${LIBRARIES})
 
 add_executable(lu_bench lu.c ${UTIL})
 target_link_libraries(lu_bench ${LIBRARIES})

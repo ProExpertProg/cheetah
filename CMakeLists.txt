@@ -16,7 +16,7 @@ set(CMAKE_MODULE_PATH
 
 # Check if cheetah is built as a standalone project.
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR CHEETAH_STANDALONE_BUILD)
-  project(Cheetah CXX C)
+  project(Cheetah LANGUAGES C CXX)
 
   set(PACKAGE_NAME cheetah)
   set(PACKAGE_VERSION 8.0.1)
