@@ -177,15 +177,15 @@ else()
   add_compile_definitions(CILK_DEBUG=1)
 endif()
 
-if(SCHED_STATS)
+if (SCHED_STATS)
   add_compile_definitions(SCHED_STATS=1)
-else()
+else ()
   add_compile_definitions(SCHED_STATS=0)
-endif()
+endif ()
 
-if(ALERT_LVL)
+if (ALERT_LVL)
   add_compile_definitions(ALERT_LVL=${ALERT_LVL})
-endif()
+endif ()
 
 include_directories(runtime)
 

@@ -59,6 +59,9 @@ void __cilkrts_enter_loop_frame(__cilkrts_loop_frame * lf, __uint64_t start, __u
     w->current_stack_frame = &lf->sf;
     // WHEN_CILK_DEBUG(sf->magic = CILK_STACKFRAME_MAGIC);
     CILK_ASSERT(w, __cilkrts_is_loop(&lf->sf));
+
+    // save so we can access it later when we're stackless
+    w->local_loop_frame = lf;
 }
 
 // inlined by the compiler

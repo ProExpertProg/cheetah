@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <limits.h>
 #include "cilk2c.h"
 #include "scheduler.h"
 
@@ -34,7 +35,7 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
-    __cilkrts_get_tls_worker()->local_loop_frame = (__cilkrts_loop_frame *) inner_lf.sf.call_parent;
+    inner_lf.sf.worker->local_loop_frame = (__cilkrts_loop_frame *) inner_lf.sf.call_parent;
 
     __cilkrts_pop_frame(&inner_lf.sf);
     __cilkrts_leave_frame(&inner_lf.sf);
@@ -42,21 +43,27 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
 
 void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain) {
     __cilkrts_loop_frame lf;
-    uint64_t n = count;
-    uint64_t end = n / grain, rem = n % grain;
+    uint64_t end, rem;
+
+    if (grain == 1) {
+        end = count;
+        rem = 0;
+    } else if (((grain-1) & grain) == 0) { // power of 2 grainsize
+        end = count >> __builtin_ctz(grain); // trailing zeroes intrinsic
+        rem = count & (grain - 1);
+    } else {
+        end = count / grain, rem = count % grain;
+    }
+
+    // sanity check
+    CILK_ASSERT(__cilkrts_get_tls_worker(), end == n / grain);
+    CILK_ASSERT(__cilkrts_get_tls_worker(), rem == n % grain);
+
     __cilkrts_enter_loop_frame(&lf, 0, end);
-    // printf("Cilk for\n");
 
     // cilk_for(int i = low; i < high; ++i) {
     __cilkrts_save_fp_ctrl_state(&lf.sf);
-    if (!__builtin_setjmp(lf.sf.ctx)) {
-        // first time entering this loop,
-        // else is entering the loop after steal
-        // make sure the setjmp doesn't get optimized away.
-
-        __cilkrts_get_tls_worker()->local_loop_frame = &lf;
-
-    }
+    __builtin_setjmp(lf.sf.ctx); // the same behavior first time or not
 
     __cilkrts_cilk_loop_helper64(data, body, grain);
 
@@ -106,7 +113,7 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
-    __cilkrts_get_tls_worker()->local_loop_frame = (__cilkrts_loop_frame *) inner_lf.sf.call_parent;
+    inner_lf.sf.worker->local_loop_frame = (__cilkrts_loop_frame *) inner_lf.sf.call_parent;
 
     __cilkrts_pop_frame(&inner_lf.sf);
     __cilkrts_leave_frame(&inner_lf.sf);
@@ -114,21 +121,27 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
 
 void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain) {
     __cilkrts_loop_frame lf;
-    uint32_t n = count;
-    uint32_t end = n / grain, rem = n % grain;
+    uint32_t end, rem;
+
+    if (grain == 1) {
+        end = count;
+        rem = 0;
+    } else if (((grain-1) & grain) == 0) { // power of 2 grainsize
+        end = count >> __builtin_ctz(grain); // trailing zeroes intrinsic
+        rem = count & (grain - 1);
+    } else {
+        end = count / grain, rem = count % grain;
+    }
+
+    // sanity check
+    CILK_ASSERT(__cilkrts_get_tls_worker(), end == n / grain);
+    CILK_ASSERT(__cilkrts_get_tls_worker(), rem == n % grain);
+
     __cilkrts_enter_loop_frame(&lf, 0, end);
-    // printf("Cilk for\n");
 
     // cilk_for(int i = low; i < high; ++i) {
     __cilkrts_save_fp_ctrl_state(&lf.sf);
-    if (!__builtin_setjmp(lf.sf.ctx)) {
-        // first time entering this loop,
-        // else is entering the loop after steal
-        // make sure the setjmp doesn't get optimized away.
-
-        __cilkrts_get_tls_worker()->local_loop_frame = &lf;
-
-    }
+    __builtin_setjmp(lf.sf.ctx); // the same behavior first time or not
 
     __cilkrts_cilk_loop_helper32(data, body, grain);
 
@@ -141,6 +154,8 @@ void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count, un
 
     __cilkrts_pop_frame(&local_lf()->sf);
     __cilkrts_leave_loop_frame(local_lf());
+
+    CILK_ASSERT(lf.sf.worker, local_lf() == &lf);
     if (rem != 0)
         body(data, count - rem, count);
 }
