@@ -29,10 +29,12 @@ void __cilkrts_save_fp_ctrl_state(__cilkrts_stack_frame *sf);
 void __cilkrts_detach(__cilkrts_stack_frame * self);
 void __cilkrts_sync(__cilkrts_stack_frame *sf);
 
-__cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *lf, __uint64_t * index);
+__cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *lf);
 
 void __cilkrts_pop_frame(__cilkrts_stack_frame * sf);
 void __cilkrts_leave_frame(__cilkrts_stack_frame * sf);
 void __cilkrts_leave_loop_frame(__cilkrts_loop_frame * sf);
+
+__cilkrts_loop_frame * local_lf();
 int __cilkrts_get_nworkers(void);
 #endif

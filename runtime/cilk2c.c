@@ -173,7 +173,7 @@ void __cilkrts_sync(__cilkrts_stack_frame *sf) {
     }
 }
 
-__cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *lf, __uint64_t *index) {
+__cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *lf) {
     __cilkrts_worker *w = lf->sf.worker;
     __cilkrts_alert(ALERT_CFRAME,
                     "[%d]: (__cilkrts_pop_loop_frame) attempting to obtain another iteration for frame %p\n",
@@ -189,6 +189,7 @@ __cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *
     // THESE protocol
 
     __cilkrts_loop_frame *pLoopFrame = (__cilkrts_loop_frame *) lf->sf.call_parent;
+    CILK_ASSERT(w, lf->parentLF == pLoopFrame);
 
     // safe to read tail as we're the only ones updating it
     // either:
@@ -199,8 +200,7 @@ __cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *
 
     // we just need to make sure that the load of end happens after store of start
     uint64_t start = __atomic_load_n(&pLoopFrame->start, __ATOMIC_RELAXED);
-
-    *index = start++;
+    start++;
     __atomic_store_n(&pLoopFrame->start, start, __ATOMIC_SEQ_CST);
 
     if (start > __atomic_load_n(&pLoopFrame->end, __ATOMIC_SEQ_CST)) {
@@ -317,6 +317,12 @@ void __cilkrts_leave_loop_frame(__cilkrts_loop_frame * lf) {
             CILK_ASSERT(w, !__cilkrts_is_dynamic(&lf->sf));
         }
     }
+}
+
+__cilkrts_loop_frame * local_lf() {
+    extern __thread __cilkrts_worker *tls_worker; // faster than a function call
+    return tls_worker->local_loop_frame;
+    // return __cilkrts_get_tls_worker()->local_loop_frame;
 }
 
 int __cilkrts_get_nworkers(void) {

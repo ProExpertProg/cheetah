@@ -21,13 +21,15 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
         __cilkrts_detach(&inner_lf.sf); // push the parent loop_frame to the deque
 
         do {
-            body(data, i * grainsize, (i + 1) * grainsize);
-            status = __cilkrts_pop_loop_frame(&inner_lf, &i);
+            CILK_ASSERT(__cilkrts_get_tls_worker(), i + grainsize == inner_lf.parentLF->start * grainsize);
+            body(data, i, i + grainsize);
+            status = __cilkrts_pop_loop_frame(&inner_lf);
+            i += grainsize;
         } while (status == SUCCESS_ITERATION);
     }
 
     if (status == SUCCESS_LAST_ITERATION) {
-        body(data, i * grainsize, (i + 1) * grainsize);
+        body(data, i, i + grainsize);
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
@@ -90,13 +92,15 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
         __cilkrts_detach(&inner_lf.sf); // push the parent loop_frame to the deque
 
         do {
-            body(data, i * grainsize, (i + 1) * grainsize);
-            status = __cilkrts_pop_loop_frame(&inner_lf, &i);
+            CILK_ASSERT(__cilkrts_get_tls_worker(), i + grainsize == inner_lf.parentLF->start * grainsize);
+            body(data, i, i + grainsize);
+            status = __cilkrts_pop_loop_frame(&inner_lf);
+            i += grainsize;
         } while (status == SUCCESS_ITERATION);
     }
 
     if (status == SUCCESS_LAST_ITERATION) {
-        body(data, i * grainsize, (i + 1) * grainsize);
+        body(data, i, i + grainsize);
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body

@@ -13,10 +13,6 @@ void __cilkrts_init_tls_variables();
 __cilkrts_worker * __cilkrts_get_tls_worker(); 
 void __cilkrts_set_tls_worker(__cilkrts_worker *w);
 
-inline __cilkrts_loop_frame * local_lf() {
-    return __cilkrts_get_tls_worker()->local_loop_frame;
-}
-
 int Cilk_sync(__cilkrts_worker *const ws, 
               __cilkrts_stack_frame *frame);
 

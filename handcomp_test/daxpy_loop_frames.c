@@ -30,7 +30,7 @@ static void __attribute__ ((noinline)) daxpy_loop_helper(double *y, const double
     __cilkrts_inner_loop_frame inner_lf;
     __cilkrts_enter_inner_loop_frame(&inner_lf);
 
-    __cilkrts_iteration_return status = __cilkrts_grab_first_iteration(&inner_lf, &i);
+    __cilkrts_iteration_status status = __cilkrts_grab_first_iteration(&inner_lf);
     if (status == SUCCESS_ITERATION) {
         __cilkrts_detach(&inner_lf.sf); // push the parent loop_frame to the deque
 
