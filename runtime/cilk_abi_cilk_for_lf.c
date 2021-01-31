@@ -17,6 +17,7 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
     __cilkrts_enter_inner_loop_frame(&inner_lf);
 
     __cilkrts_iteration_return status = __cilkrts_grab_first_iteration(&inner_lf, &i);
+    i *= grainsize;
     if (status == SUCCESS_ITERATION) {
         __cilkrts_detach(&inner_lf.sf); // push the parent loop_frame to the deque
 
@@ -88,6 +89,7 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
     __cilkrts_enter_inner_loop_frame(&inner_lf);
 
     __cilkrts_iteration_return status = __cilkrts_grab_first_iteration(&inner_lf, &i);
+    i *= grainsize;
     if (status == SUCCESS_ITERATION) {
         __cilkrts_detach(&inner_lf.sf); // push the parent loop_frame to the deque
 
