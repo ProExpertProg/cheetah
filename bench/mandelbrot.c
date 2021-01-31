@@ -58,12 +58,12 @@ unsigned char *cilk_mandelbrot(double x0, double y0, double x1, double y1, int w
 
 int usage(void) {
     fprintf(stderr,
-            "\nUsage: mandelbrot [-n height] [-g grainsize] [-c] [-h]\n\n");
+            "\nUsage: mandelbrot [-x width] [-x height] [-d depth] [-g grainsize] [-c] [-h]\n\n");
     return -1;
 }
 
-const char *specifiers[] = {"-n", "-c", "-g", "-h", 0};
-int opt_types[] = {LONGARG, BOOLARG, LONGARG, BOOLARG, 0};
+const char *specifiers[] = {"-x", "-y", "-d", "-c", "-g", "-h", 0};
+int opt_types[] = {LONGARG, LONGARG, INTARG, BOOLARG, LONGARG, BOOLARG, 0};
 
 int main(int argc, char *argv[]) {
 
@@ -71,20 +71,19 @@ int main(int argc, char *argv[]) {
     double y0 = -0.875;
     double x1 = 1;
     double y1 = 0.875;
-    uint64_t height = 4096, width;
+    uint64_t height = 4096, width = 8192;
 
     int max_depth = 10;
     uint64_t grainsize = 1;
 
     int help = 0, check = 0;
 
-    get_options(argc, argv, specifiers, opt_types, &height, &check, &grainsize, &help);
+    get_options(argc, argv, specifiers, opt_types, &width, &height, &max_depth, &check, &grainsize, &help);
 
     if (help) {
         return usage();
     }
 
-    width = 2 * height;
     // Width should be a multiple of 8
     assert(width % 8 == 0);
 
