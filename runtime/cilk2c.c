@@ -203,7 +203,7 @@ __cilkrts_iteration_return __cilkrts_pop_loop_frame(__cilkrts_inner_loop_frame *
     start++;
     __atomic_store_n(&pLoopFrame->start, start, __ATOMIC_SEQ_CST);
 
-    if (start > __atomic_load_n(&pLoopFrame->end, __ATOMIC_SEQ_CST)) {
+    if (__builtin_expect(start > __atomic_load_n(&pLoopFrame->end, __ATOMIC_SEQ_CST), 0)) {
         deque_lock_self(w);
         // no need for a fence because we now have exclusive access
         // also, the lock already fenced (it should have??)
