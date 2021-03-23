@@ -218,7 +218,6 @@ add_subdirectory(include)
 add_subdirectory(runtime)
 
 if (CHEETAH_INCLUDE_TESTS)
-  # TODO: Set up CMake for Cheetah tests.
-  # add_subdirectory(handcomp_test)
+  add_subdirectory(handcomp_test)
   # add_subdirectory(bench)
 endif()
