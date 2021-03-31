@@ -16,7 +16,7 @@ set(CMAKE_MODULE_PATH
 
 # Check if cheetah is built as a standalone project.
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR CHEETAH_STANDALONE_BUILD)
-  project(Cheetah CXX C)
+  project(Cheetah LANGUAGES CXX C)
   set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
   set(PACKAGE_NAME Cheetah)
@@ -210,6 +210,30 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CHEETAH_C_FLAGS}")
 # Setup Source Code
 #===============================================================================
 
+if(CHEETAH_INCLUDE_TESTS)
+  # handcomp tests use the static library
+  set(CHEETAH_ENABLE_STATIC ON)
+  set(CHEETAH_ENABLE_SHARED ON)
+  # handcomp tests use the static library
+  set(CHEETAH_ENABLE_STATIC ON)
+endif()
+
+if (CMAKE_BUILD_TYPE STREQUAL Release)
+  add_compile_definitions(CILK_DEBUG=0)
+else()
+  add_compile_definitions(CILK_DEBUG=1)
+endif()
+
+if (SCHED_STATS)
+  add_compile_definitions(SCHED_STATS=1)
+else ()
+  add_compile_definitions(SCHED_STATS=0)
+endif ()
+
+if (ALERT_LVL)
+  add_compile_definitions(ALERT_LVL=${ALERT_LVL})
+endif ()
+
 include_directories(runtime)
 
 # Add source code. This also contains all of the logic for deciding linker flags
@@ -219,5 +243,5 @@ add_subdirectory(runtime)
 
 if (CHEETAH_INCLUDE_TESTS)
   add_subdirectory(handcomp_test)
-  # add_subdirectory(bench)
+  add_subdirectory(bench)
 endif()

@@ -22,8 +22,11 @@
 
 #ifndef CILK_DEBUG
 #define CILK_DEBUG 1
-#endif 
+#endif
+
+#ifndef CILK_STATS
 #define CILK_STATS 0
+#endif
 
 #define CILK_CACHE_LINE 64
 

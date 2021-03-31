@@ -163,6 +163,13 @@ void __cilkrts_sync(__cilkrts_stack_frame *sf) {
     if (Cilk_sync(w, sf) == SYNC_READY) {
         // The Cilk_sync restores the original rsp stored in sf->ctx
         // if this frame is ready to sync.
+        // the sync could reallocate the LoopFrame.
+        if (sf != w->current_stack_frame) {
+            // sf is not a valid location anymore
+            CILK_ASSERT(w, __cilkrts_is_loop(w->current_stack_frame));
+            CILK_ASSERT(w, w->current_stack_frame == &w->local_loop_frame->sf);
+            sf = w->current_stack_frame;
+        }
         sysdep_longjmp_to_sf(sf);
     } else {
         longjmp_to_runtime(w);
@@ -191,7 +198,7 @@ void __cilkrts_pause_frame(__cilkrts_stack_frame *sf, char *exn) {
        with the clear of DETACHED.  Does it modify flags too? */
     sf->flags &= ~CILK_FRAME_DETACHED;
     if (__builtin_expect(exc > tail, 0)) {
-        Cilk_exception_handler(exn);
+        Cilk_exception_handler(exn, __cilkrts_is_inner_loop(sf));
         // If Cilk_exception_handler returns this thread won
         // the race and can return to the parent function.
     }
@@ -220,7 +227,7 @@ void __cilkrts_leave_frame(__cilkrts_stack_frame *sf) {
            with the clear of DETACHED.  Does it modify flags too? */
         sf->flags &= ~CILK_FRAME_DETACHED;
         if (__builtin_expect(exc > tail, 0)) {
-            Cilk_exception_handler(NULL);
+            Cilk_exception_handler(NULL, __cilkrts_is_inner_loop(sf));
             // If Cilk_exception_handler returns this thread won
             // the race and can return to the parent function.
         }
@@ -240,6 +247,58 @@ void __cilkrts_leave_frame(__cilkrts_stack_frame *sf) {
             CILK_ASSERT(w, CHECK_CILK_FRAME_MAGIC(w->g, sf));
         }
     }
+}
+
+// lf != w->current_stack_frame because we just executed pop
+void __cilkrts_leave_loop_frame(__cilkrts_loop_frame * lf) {
+
+    __cilkrts_worker *w = lf->sf.worker;
+    cilkrts_alert(CFRAME,w,
+                    "(__cilkrts_leave_loop_frame) leaving frame %p\n", lf);
+
+    CILK_ASSERT(w, CHECK_CILK_FRAME_MAGIC(w->g, &lf->sf));
+    CILK_ASSERT(w, __cilkrts_is_loop(&lf->sf));
+    CILK_ASSERT(w, lf->sf.worker == __cilkrts_get_tls_worker());
+    CILK_ASSERT(w, lf == w->local_loop_frame);
+
+    // We've already passed the cilk_sync
+    CILK_ASSERT(w, __cilkrts_synced(&lf->sf));
+
+    // WHEN_CILK_DEBUG(sf->magic = ~CILK_STACKFRAME_MAGIC);
+
+    if(lf->sf.flags & CILK_FRAME_SPLIT) {
+        // if this frame is split
+
+        // this is the equivalent of a DETACHED standard frame, except that
+        // the THE protocol is unnecessary. Rather, we behave as if we've
+        // already failed the THE protocol (the frame is split, so somebody
+        // stole the remaining iterations). We simply end the current closure
+        // and attempt a provably good steal on the parent.
+
+        // this is pointing at our frame parent, but our closure parent is
+        // another LoopFrame, so let's unset to avoid confusion.
+        w->current_stack_frame = NULL;
+
+        Cilk_loop_frame_return();
+    } else {
+        // This loop frame is not split, which means it is the last one remaining
+        // (that is certain because we've successfully passed the cilk_sync).
+        // Hence, this protocol is the same as the one for a non-DETACHED standard frame.
+        if(lf->sf.flags & CILK_FRAME_STOLEN) { // if this frame has a full frame
+            cilkrts_alert(RETURN, w,
+                            "(__cilkrts_leave_frame) parent is call_parent!\n");
+            // leaving a full frame; need to get the full frame of its call
+            // parent back onto the deque
+            Cilk_set_return(w);
+            CILK_ASSERT(w, CHECK_CILK_FRAME_MAGIC(w->g, w->current_stack_frame));
+            CILK_ASSERT(w, !__cilkrts_is_dynamic(&lf->sf));
+        }
+    }
+}
+
+__cilkrts_loop_frame * local_lf() {
+    extern __thread __cilkrts_worker *tls_worker; // faster than a function call
+    return tls_worker->local_loop_frame;
 }
 
 unsigned __cilkrts_get_nworkers(void) { return cilkg_nproc; }

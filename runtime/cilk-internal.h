@@ -26,8 +26,6 @@ typedef struct local_state local_state;
 // Cilk stack frame related defs
 //===============================================
 
-
-
 /**
  * Every spawning function has a frame descriptor.  A spawning function
  * is a function that spawns or detaches.  Only spawning functions
@@ -76,6 +74,28 @@ struct __cilkrts_stack_frame {
     int64_t dprng_depth;
 #endif
 };
+
+struct __cilkrts_loop_frame {
+    // This needs to be on top so that we can just convert the pointer to a
+    // __cilkrts_stack_frame
+    __cilkrts_stack_frame sf;
+
+    // The indices for our iterations
+    uint64_t start;
+    uint64_t end;
+};
+
+struct __cilkrts_inner_loop_frame {
+    // This needs to be on top so that we can just convert the pointer to a
+    // __cilkrts_stack_frame
+    __cilkrts_stack_frame sf;
+
+    // Because we keep entering and leaving the inner loop frame,
+    //  we store a reference to the parent here.
+    WHEN_CILK_DEBUG(struct __cilkrts_loop_frame * parentLF);
+    // perhaps the multi-D etc
+};
+
 
 //===========================================================
 // Value defines for the flags field in cilkrts_stack_frame
@@ -139,6 +159,18 @@ static const uint32_t frame_magic =
 
 #define CHECK_CILK_FRAME_MAGIC(G, F) (frame_magic == (F)->magic)
 
+/* Is this a __cilkrts_loop_frame ? */
+#define CILK_FRAME_LOOP 0x1000u
+
+/* Is this a __cilkrts_loop_frame ? */
+#define CILK_FRAME_INNER_LOOP 0x2000u
+
+/* Was a split performed on this frame ? */
+#define CILK_FRAME_SPLIT 0x4000u
+
+/* Was this frame allocated dynamically? */
+#define CILK_FRAME_DYNAMIC 0x8000u
+
 //===========================================================
 // Helper functions for the flags field in cilkrts_stack_frame
 //===========================================================
@@ -180,6 +212,39 @@ static inline int __cilkrts_not_stolen(__cilkrts_stack_frame *sf) {
     return ((sf->flags & CILK_FRAME_STOLEN) == 0);
 }
 
+/* Returns nonzero if the frame is a loop frame. */
+static inline unsigned int __cilkrts_is_loop(__cilkrts_stack_frame *sf) {
+    return( sf->flags & CILK_FRAME_LOOP);
+}
+
+/* Returns nonzero if the frame is an inner loop frame. */
+static inline unsigned int __cilkrts_is_inner_loop(__cilkrts_stack_frame *sf) {
+    return( sf->flags & CILK_FRAME_INNER_LOOP);
+}
+
+/* Returns nonzero if the frame is an inner loop frame. */
+static inline unsigned int __cilkrts_is_split(__cilkrts_stack_frame *sf) {
+    return( sf->flags & CILK_FRAME_SPLIT);
+}
+
+static inline void __cilkrts_set_split(__cilkrts_loop_frame *lf) {
+    lf->sf.flags |= CILK_FRAME_SPLIT;
+}
+
+// should only be used when copying frames. A frame cannot be "unsplit"
+static inline void __cilkrts_set_nonsplit(__cilkrts_loop_frame *lf) {
+    lf->sf.flags &= ~CILK_FRAME_SPLIT;
+}
+
+/* Returns nonzero if the frame was allocated dynamically (not the original frame). */
+static inline unsigned int __cilkrts_is_dynamic(__cilkrts_stack_frame *sf) {
+    return (sf->flags & CILK_FRAME_DYNAMIC);
+}
+
+static inline void __cilkrts_set_dynamic(__cilkrts_loop_frame *lf) {
+    lf->sf.flags |= CILK_FRAME_DYNAMIC;
+}
+
 //===============================================
 // Worker related definition
 //===============================================
@@ -219,6 +284,10 @@ struct __cilkrts_worker {
 
     // A slot that points to the currently executing Cilk frame.
     __cilkrts_stack_frame *current_stack_frame;
+
+    // Because a thief needs its own loopframe while operating on the same stack,
+    // that needs to be saved somewhere not in a local variable
+    __cilkrts_loop_frame *local_loop_frame;
 
     // Map from reducer names to reducer values
     cilkred_map *reducer_map;

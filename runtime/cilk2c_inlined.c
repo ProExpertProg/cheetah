@@ -129,7 +129,8 @@ __cilkrts_enter_frame(__cilkrts_stack_frame *sf) {
     sf->call_parent = w->current_stack_frame;
     atomic_store_explicit(&sf->worker, w, memory_order_relaxed);
     w->current_stack_frame = sf;
-    // WHEN_CILK_DEBUG(sf->magic = CILK_STACKFRAME_MAGIC);
+
+    CILK_ASSERT(w, !__cilkrts_is_loop(sf));
 
 #ifdef ENABLE_CILKRTS_PEDIGREE
     // Pedigree maintenance.
@@ -151,7 +152,7 @@ __cilkrts_enter_frame(__cilkrts_stack_frame *sf) {
 #endif
 }
 
-// Enter a spawn helper, i.e., a fucntion containing code that was cilk_spawn'd.
+// Enter a spawn helper, i.e., a function containing code that was cilk_spawn'd.
 // This function initializes worker and stack_frame structures.  Because this
 // routine will always be executed by a Cilk worker, it is optimized compared to
 // its counterpart, __cilkrts_enter_frame.
@@ -166,6 +167,8 @@ __cilkrts_enter_frame_fast(__cilkrts_stack_frame *sf) {
     atomic_store_explicit(&sf->worker, w, memory_order_relaxed);
     w->current_stack_frame = sf;
 
+    CILK_ASSERT(w, !__cilkrts_is_loop(sf));
+
 #ifdef ENABLE_CILKRTS_PEDIGREE
     // Pedigree maintenance.
     if (sf->call_parent != NULL && !(sf->flags & CILK_FRAME_LAST)) {
@@ -185,6 +188,82 @@ __cilkrts_enter_frame_fast(__cilkrts_stack_frame *sf) {
     sf->rank = 0;
 #endif
 }
+
+__attribute__((always_inline))
+void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf, __uint64_t start, __uint64_t end) {
+    // Needs to come before get_worker, as the worker might be null
+    // before we cilkify
+    __cilkrts_enter_frame(&lf->sf);
+
+    __cilkrts_worker *w = __cilkrts_get_tls_worker();
+    cilkrts_alert(CFRAME, w, "(__cilkrts_enter_loop_frame) frame %p\n", lf);
+
+    // could have flags set from enter_frame
+    // (specifically, CILK_FRAME_LAST)
+    lf->sf.flags |= CILK_FRAME_LOOP;
+
+    lf->start = start;
+    lf->end = end;
+
+    // save so we can access it later when we're stackless
+    w->local_loop_frame = lf;
+    CILK_ASSERT(w, __cilkrts_is_loop(&lf->sf));
+}
+
+__attribute__((always_inline))
+void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
+    __cilkrts_worker *w = __cilkrts_get_tls_worker();
+
+    cilkrts_alert(CFRAME, w, "(__cilkrts_enter_inner_loop_frame) frame %p\n", lf);
+    CILK_ASSERT(w, __cilkrts_is_loop(w->current_stack_frame));
+
+    __cilkrts_enter_frame_fast(&lf->sf);
+    lf->sf.flags |= CILK_FRAME_INNER_LOOP;
+    WHEN_CILK_DEBUG(lf->parentLF = (__cilkrts_loop_frame *) lf->sf.call_parent); // already set inside enter_frame_fast
+
+    CILK_ASSERT(w, __cilkrts_is_loop(lf->sf.call_parent));
+    CILK_ASSERT(w, !__cilkrts_is_loop(&lf->sf));
+    CILK_ASSERT(w, __cilkrts_is_inner_loop(&lf->sf));
+    CILK_ASSERT(w, (lf->sf.flags & CILK_FRAME_DETACHED) == 0);
+}
+
+
+// this function should ONLY be called for the first iteration, before we push the loop frame on the deque
+__attribute__((always_inline))
+__cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame *lf, __uint64_t *index) {
+
+    WHEN_CILK_DEBUG(__cilkrts_worker *w = __cilkrts_get_tls_worker());
+    cilkrts_alert(CFRAME, w, "(__cilkrts_grab_first_iteration) frame %p\n", lf);
+    CILK_ASSERT(w, w == lf->sf.worker);
+    CILK_ASSERT(w, __cilkrts_is_inner_loop(&lf->sf));
+    CILK_ASSERT(w, __cilkrts_is_loop(lf->sf.call_parent));
+
+    // We must currently be in the inner loop frame
+    CILK_ASSERT(w, &lf->sf == w->current_stack_frame);
+
+    // this frame shouldn't be detached yet
+    CILK_ASSERT(w, (lf->sf.flags & CILK_FRAME_DETACHED) == 0);
+
+    // get the first iteration from loopframe
+    __cilkrts_loop_frame *pLoopFrame = (__cilkrts_loop_frame *) lf->sf.call_parent;
+    CILK_ASSERT(w, pLoopFrame == lf->parentLF);
+
+    *index = pLoopFrame->start++;
+    cilkrts_alert(CFRAME, w, "(__cilkrts_grab_iteration) Iteration %lu unconfirmed\n", *index);
+
+    if (pLoopFrame->start > pLoopFrame->end) {
+        cilkrts_alert(LOOP, w, "(__cilkrts_grab_iteration) Loop ending at i=%lu\n", *index);
+        pLoopFrame->start--;
+        return FAIL;
+    } else if (pLoopFrame->start == pLoopFrame->end) {
+        cilkrts_alert(LOOP, w, "(__cilkrts_grab_iteration) Only iteration with i=%lu\n", *index);
+        return SUCCESS_LAST_ITERATION;
+    } else {
+        return SUCCESS_ITERATION;
+    }
+
+}
+
 
 // Detach the given Cilk stack frame, allowing other Cilk workers to steal the
 // parent frame.

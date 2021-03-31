@@ -598,6 +598,8 @@ const char *name_for_im_tag(enum im_tag tag) {
         return "fiber";
     case IM_REDUCER_MAP:
         return "reducer map";
+    case IM_LOOP_FRAMES:
+        return "loop frames";
     default:
         return "unknown";
     }

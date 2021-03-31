@@ -13,6 +13,7 @@ enum im_tag {
     IM_CLOSURE,
     IM_FIBER,
     IM_REDUCER_MAP,
+    IM_LOOP_FRAMES,
     IM_NUM_TAGS
 };
 

@@ -1,4 +1,4 @@
-Questions for TB / John: 
+Questions for TB / John:
 
 Q: Where is __default_cilkrts_startup and __default_cilkrts_shutdown inserted?
     Is it inserted by the compiler as a global constructor / destructor?
@@ -7,7 +7,7 @@ compiler.  because those functions are marked with __attribute__((constructor))/
 __attribute__((destructor)), the linker and loader know to run those functions
 before/after the execution of main (just standard linker / loader features)
 
-Q: Is __cilkrts_atinit and __cilkrts_atexit currently used?  
+Q: Is __cilkrts_atinit and __cilkrts_atexit currently used?
 A: No.  Plan to remove.
 
 Q: using cmake in the runtime didn't work for me

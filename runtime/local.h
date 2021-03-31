@@ -2,6 +2,7 @@
 #define _CILK_LOCAL_H
 
 #include <stdbool.h>
+#include "internal-malloc-impl.h"
 
 struct local_state {
     struct __cilkrts_stack_frame **shadow_stack;

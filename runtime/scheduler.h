@@ -18,8 +18,9 @@ CHEETAH_INTERNAL void __cilkrts_set_tls_worker(__cilkrts_worker *w);
 CHEETAH_INTERNAL int Cilk_sync(__cilkrts_worker *const ws,
                                __cilkrts_stack_frame *frame);
 
+__attribute__((noreturn)) void Cilk_loop_frame_return();
 CHEETAH_INTERNAL void Cilk_set_return(__cilkrts_worker *const ws);
-CHEETAH_INTERNAL void Cilk_exception_handler(char *exn);
+CHEETAH_INTERNAL void Cilk_exception_handler(char *exn, unsigned int isLoop);
 
 CHEETAH_INTERNAL_NORETURN void longjmp_to_runtime(__cilkrts_worker *w);
 CHEETAH_INTERNAL void worker_scheduler(__cilkrts_worker *ws, Closure *t);

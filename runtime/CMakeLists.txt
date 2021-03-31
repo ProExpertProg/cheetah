@@ -1,5 +1,17 @@
 set(CHEETAH_LIB_CMAKEFILES_DIR "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}"  PARENT_SCOPE)
 
+# add the __cilkrts_cilk_for_64 ABI function
+if(CILK_FOR_DC)
+  set(CILK_FOR_FILE cilk_abi_cilk_for_dc.c)
+elseif(CILK_FOR_SERIAL)
+  set(CILK_FOR_FILE cilk_abi_cilk_for_serial.c)
+else()
+  set(CILK_FOR_FILE cilk_abi_cilk_for_lf.c)
+endif()
+
+# cannot be omitted
+set_source_files_properties(${CILK_FOR_FILE} PROPERTIES COMPILE_OPTIONS "-fno-omit-frame-pointer")
+
 # Get sources
 set(CHEETAH_SOURCES
   c_reducers.c
@@ -19,6 +31,8 @@ set(CHEETAH_SOURCES
   reducer_impl.c
   sched_stats.c
   scheduler.c
+  loop-frames.c
+  ${CILK_FOR_FILE}
 )
 
 # We assume there is just one source file to compile for the cheetah

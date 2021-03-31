@@ -2,14 +2,16 @@
 #define TIMING_COUNT 0
 #endif
 
+#if TIMING_COUNT
+#include "ktiming.h"
+#endif
+ 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "ktiming.h"
+#include <cilk/cilk.h>
 
-extern size_t ZERO;
-void __attribute__((weak)) dummy(void *p) { return; }
 
 // int * count;
 
@@ -32,7 +34,7 @@ void __attribute__((weak)) dummy(void *p) { return; }
  * <a> contains array of <n> queen positions.  Returns 1
  * if none of the queens conflict, and returns 0 otherwise.
  */
-int ok (int n, char *a) {
+static int ok (int n, char *a) {
 
     int i, j;
     char p, q;
@@ -49,11 +51,47 @@ int ok (int n, char *a) {
     return 1;
 }
 
-// at link time, either the one using spawns or the one using cilk_for
-// for cilk_for, we also choose divide-and-conquer or loop frames
-int nqueens(int n, int j, const char *a);
+static int nqueens (int n, int j, char *a) {
 
-int main(int argc, char *argv[]) {
+    char *b;
+    int i;
+    int *count;
+    int solNum = 0;
+
+    if (n == j) {
+        return 1;
+    }
+
+    count = (int *) alloca(n * sizeof(int));
+    (void) memset(count, 0, n * sizeof (int));
+
+    for (i = 0; i < n; i++) {
+
+        /***
+         * Strictly speaking, this (alloca after spawn) is frowned 
+         * up on, but in this case, this is ok, because b returned by 
+         * alloca is only used in this iteration; later spawns don't 
+         * need to be able to access copies of b from previous iterations 
+         ***/
+        b = (char *) alloca((j + 1) * sizeof (char));
+        memcpy(b, a, j * sizeof (char));
+        b[j] = i;
+
+        if(ok (j + 1, b)) {
+            count[i] = cilk_spawn nqueens(n, j + 1, b);
+        }
+    }
+    cilk_sync; 
+
+    for(i = 0; i < n; i++) {
+        solNum += count[i];
+    }
+
+    return solNum;
+}
+
+int main(int argc, char *argv[]) { 
+
   int n = 13;
   char *a;
   int res;
@@ -78,7 +116,7 @@ int main(int argc, char *argv[]) {
       begin = ktiming_getmark();
       res = nqueens(n, 0, a);
       end = ktiming_getmark();
-      elapsed[i] = ktiming_diff_nsec(&begin, &end);
+      elapsed[i] = ktiming_diff_usec(&begin, &end);
   }
   print_runtime(elapsed, TIMING_COUNT);
 #else

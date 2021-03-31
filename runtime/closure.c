@@ -138,6 +138,8 @@ static inline void Closure_init(Closure *t) {
     t->next_ready = NULL;
     t->prev_ready = NULL;
 
+    t->most_original_loop_frame = NULL;
+
     clear_closure_exception(&(t->right_exn));
     clear_closure_exception(&(t->child_exn));
     clear_closure_exception(&(t->user_exn));

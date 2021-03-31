@@ -6,7 +6,9 @@
 
 typedef struct __cilkrts_worker __cilkrts_worker;
 
+#ifndef SCHED_STATS
 #define SCHED_STATS CILK_STATS
+#endif
 
 enum timing_type {
     INTERVAL_WORK = 0, // work time

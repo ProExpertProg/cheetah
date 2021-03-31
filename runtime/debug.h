@@ -12,9 +12,7 @@ struct __cilkrts_worker;
 #define CILK_CHECK(g, cond, complain, ...)                                     \
     ((cond) ? (void)0 : cilk_die_internal(g, complain, __VA_ARGS__))
 
-#ifndef ALERT_LVL
-#define ALERT_LVL 0x3d03
-#endif
+
 #define ALERT_NONE 0x0
 #define ALERT_FIBER 0x001
 #define ALERT_FIBER_SUMMARY 0x002
@@ -30,6 +28,11 @@ struct __cilkrts_worker;
 #define ALERT_BOOT 0x1000
 #define ALERT_START 0x2000
 #define ALERT_CLOSURE 0x4000
+#define ALERT_LOOP 0x8000
+
+#ifndef ALERT_LVL
+#define ALERT_LVL 0x3d03 // ALERT_BOOT | ALERT_START | ALERT_REDUCE_ID | ALERT_REDUCE | ALERT_EXCEPT | ALERT_FIBER | ALERT_FIBER_SUMMARY
+#endif
 
 extern CHEETAH_INTERNAL unsigned int alert_level;
 #define ALERT_ENABLED(flag) (alert_level & (ALERT_LVL & ALERT_##flag))
