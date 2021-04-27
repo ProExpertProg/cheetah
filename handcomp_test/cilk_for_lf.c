@@ -4,7 +4,11 @@
 
 #include "cilk_for.h"
 #include "../runtime/cilk2c.h"
-#include "../runtime/scheduler.h"
+#include "../runtime/cilk2c_inlined.c"
+
+extern size_t ZERO;
+
+void __attribute__((weak)) dummy(void *p) { return; }
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline)) cilk_loop_helper(void *data, ForBody body, uint64_t low, uint64_t grainsize) {
@@ -21,6 +25,7 @@ static void __attribute__ ((noinline)) cilk_loop_helper(void *data, ForBody body
                 body(j, data);
             }
             status = __cilkrts_loop_frame_next(&inner_lf);
+            i += grainsize;
         } while (status == SUCCESS_ITERATION);
     }
 
@@ -41,6 +46,7 @@ static void __attribute__ ((noinline)) cilk_loop_helper(void *data, ForBody body
 
 void cilk_for(uint64_t low, uint64_t high, void *data, ForBody body, uint64_t grainsize) {
 
+    dummy(alloca(ZERO));
     __cilkrts_loop_frame lf;
     uint64_t n = high - low;
     uint64_t end = n / grainsize, rem = n % grainsize;
@@ -48,14 +54,7 @@ void cilk_for(uint64_t low, uint64_t high, void *data, ForBody body, uint64_t gr
 
     // cilk_for(int i = low; i < high; ++i) {
     __cilkrts_save_fp_ctrl_state(&lf.sf);
-    if (!__builtin_setjmp(lf.sf.ctx)) {
-        // first time entering this loop,
-        // else is entering the loop after steal
-        // make sure the setjmp doesn't get optimized away.
-
-        __cilkrts_get_tls_worker()->local_loop_frame = &lf;
-
-    }
+    __builtin_setjmp(lf.sf.ctx);
 
     cilk_loop_helper(data, body, low, grainsize);
 
@@ -70,7 +69,9 @@ void cilk_for(uint64_t low, uint64_t high, void *data, ForBody body, uint64_t gr
     }
 
     __cilkrts_pop_frame(&local_lf()->sf);
-    __cilkrts_leave_loop_frame(local_lf());
+    // cannot refer to local_lf() for this check because w could be null
+    if (__cilkrts_get_tls_worker() != NULL)
+        __cilkrts_leave_loop_frame(local_lf());
 
     for (uint64_t i = high - rem; i < high; ++i) {
         body(i, data);

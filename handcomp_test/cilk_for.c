@@ -4,6 +4,10 @@
 
 #include "cilk_for.h"
 #include "../runtime/cilk2c.h"
+#include "../runtime/cilk2c_inlined.c"
+
+extern size_t ZERO;
+void __attribute__((weak)) dummy(void *p) { return; }
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t high, void *data, ForBody body, uint64_t grainsize) {
@@ -17,6 +21,7 @@ static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t h
 
 void cilk_for(uint64_t low, uint64_t high, void *data, ForBody body, uint64_t grainsize) {
 
+    dummy(alloca(ZERO));
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
 
@@ -48,6 +53,6 @@ void cilk_for(uint64_t low, uint64_t high, void *data, ForBody body, uint64_t gr
     }
 
     __cilkrts_pop_frame(&sf);
-    __cilkrts_leave_frame(&sf);
-
+    if (0 != sf.flags)
+        __cilkrts_leave_frame(&sf);
 }

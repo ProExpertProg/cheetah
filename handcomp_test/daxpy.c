@@ -8,9 +8,13 @@
 
 #include "../runtime/cilk2c.h"
 #include "../runtime/cilk2c_inlined.c"
-#include "../runtime/scheduler.h"
+
 #include "getoptions.h"
 #include "ktiming.h"
+
+extern size_t ZERO;
+
+void __attribute__((weak)) dummy(void *p) { return; }
 
 /*
  * void daxpy(int n, double a, double *x, double *y) {
@@ -31,6 +35,7 @@ static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t h
 
 void cilk_loop_recursive(uint64_t low, uint64_t high, void *d, uint64_t grainsize) {
 
+    dummy(alloca(ZERO));
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
 
@@ -56,15 +61,16 @@ void cilk_loop_recursive(uint64_t low, uint64_t high, void *d, uint64_t grainsiz
     }
 
     /* cilk_sync */
-    if(sf.flags & CILK_FRAME_UNSYNCHED) {
+    if (sf.flags & CILK_FRAME_UNSYNCHED) {
         __cilkrts_save_fp_ctrl_state(&sf);
-        if(!__builtin_setjmp(sf.ctx)) {
+        if (!__builtin_setjmp(sf.ctx)) {
             __cilkrts_sync(&sf);
         }
     }
 
     __cilkrts_pop_frame(&sf);
-    __cilkrts_leave_frame(&sf);
+    if (0 != sf.flags)
+        __cilkrts_leave_frame(&sf);
 
 }
 
@@ -93,7 +99,7 @@ int usage(void) {
 const char *specifiers[] = {"-n", "-c", "-g", "-h", 0};
 int opt_types[] = {LONGARG, BOOLARG, LONGARG, BOOLARG, 0};
 
-int cilk_main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 
     double a = 3.0;
 
@@ -123,7 +129,7 @@ int cilk_main(int argc, char *argv[]) {
         begin = ktiming_getmark();
         daxpy(y, x, a, N, grainsize);
         end = ktiming_getmark();
-        running_time[t] = ktiming_diff_usec(&begin, &end);
+        running_time[t] = ktiming_diff_nsec(&begin, &end);
 
         if (check) {
             int success = 1;

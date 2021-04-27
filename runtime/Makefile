@@ -7,7 +7,17 @@ REDUCER_DEF = -DREDUCER_MODULE
 
 MAIN = $(RTS_LIB)
 BITCODE_ABI = $(MAIN)-abi.bc
-SRCS = $(filter-out $(PERSON_C_SRC).c, $(filter-out $(PERSON_CPP_SRC).c, $(wildcard *.c)))
+SRCS = $(filter-out $(wildcard cilk_abi_cilk_for*.c), $(filter-out $(PERSON_C_SRC).c, $(filter-out $(PERSON_CPP_SRC).c, $(wildcard *.c))))
+ifdef CILK_FOR_DC
+SRCS += cilk_abi_cilk_for_dc.c
+else
+ifdef CILK_FOR_SERIAL
+SRCS += cilk_abi_cilk_for_serial.c
+else
+SRCS += cilk_abi_cilk_for_lf.c
+endif
+endif
+
 HDRS = $(wildcard *.h)
 OBJS = $(patsubst %.c,./build/%.o,$(SRCS))
 INCLUDES = -I../include/

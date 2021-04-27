@@ -191,8 +191,7 @@ __cilkrts_enter_frame_fast(__cilkrts_stack_frame *sf) {
 
 __attribute__((always_inline))
 void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf, __uint64_t start, __uint64_t end) {
-    // Needs to come before get_worker, as the worker might be null
-    // before we cilkify
+    // Needs to come before get_worker, as the worker might be null before we cilkify
     __cilkrts_enter_frame(&lf->sf);
 
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
@@ -232,7 +231,7 @@ void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
 __attribute__((always_inline))
 __cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame *lf, __uint64_t *index) {
 
-    WHEN_CILK_DEBUG(__cilkrts_worker *w = __cilkrts_get_tls_worker());
+    __cilkrts_worker *w = __cilkrts_get_tls_worker();
     cilkrts_alert(CFRAME, w, "(__cilkrts_grab_first_iteration) frame %p\n", lf);
     CILK_ASSERT(w, w == lf->sf.worker);
     CILK_ASSERT(w, __cilkrts_is_inner_loop(&lf->sf));
@@ -316,7 +315,7 @@ void __cilkrts_pop_frame(__cilkrts_stack_frame *sf) {
     sf->call_parent = NULL;
     // Check if sf is the final stack frame, and if so, terminate the Cilkified
     // region.
-    if (sf->flags & CILK_FRAME_LAST) {
+    if ((sf->flags & CILK_FRAME_LAST) && !__cilkrts_is_split(sf)) {
         uncilkify(w->g, sf);
     }
 }

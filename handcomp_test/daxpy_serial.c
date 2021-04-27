@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
         begin = ktiming_getmark();
         daxpy(y, x, a, N);
         end = ktiming_getmark();
-        running_time[t] = ktiming_diff_usec(&begin, &end);
+        running_time[t] = ktiming_diff_nsec(&begin, &end);
 
         if (check) {
             int success = 1;

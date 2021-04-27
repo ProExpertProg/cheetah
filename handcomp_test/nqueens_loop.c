@@ -6,8 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../runtime/cilk2c.h"
 #include "cilk_for.h"
+
+extern size_t ZERO;
+void __attribute__((weak)) dummy(void *p) { return; }
 
 int ok (int n, char *a);
 
@@ -40,6 +42,7 @@ static void body(uint64_t i, void *data) {
 
 int nqueens(int n, int j, const char *a) {
 
+    dummy(alloca(ZERO));
     char *b;
     int i;
     int *count;
@@ -52,7 +55,7 @@ int nqueens(int n, int j, const char *a) {
     count = (int *) alloca(n * sizeof(int));
     (void) memset(count, 0, n * sizeof(int));
 
-    alloca(ZERO);
+    dummy(alloca(ZERO));
 
     forData data = {.count=count, .j=j, .a=a, .n=n};
     cilk_for(0, n, &data, body, 1);

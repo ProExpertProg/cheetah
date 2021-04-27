@@ -39,11 +39,11 @@ split_loop_frame(__cilkrts_stack_frame *frame_to_steal, __cilkrts_worker *w, __c
         // The old frame is now split (it could be split before,
         // in which case the new one is also split).
         __cilkrts_set_split(lf);
-        __cilkrts_set_synced(&lf->sf);
+
         // Because the thief takes the old closure and new frame,
         // the old frame goes into a new child closure,
         // with no outstanding children, so it's synced
-
+        __cilkrts_set_synced(&lf->sf);
         *res_lf = new_lf;
         return retractExc ? SUCCESS : SUCCESS_REMOVE;
     }

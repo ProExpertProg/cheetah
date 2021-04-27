@@ -482,7 +482,6 @@ void cilksort(ELM *low, ELM *tmp, long size) {
     cilkmerge(tmpA, tmpC - 1, tmpC, tmpA + size - 1, A);
 
     __cilkrts_pop_frame(&sf);
-    // TODO-WHY
     if (0 != sf.flags)
         __cilkrts_leave_frame(&sf);
 

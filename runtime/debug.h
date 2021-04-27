@@ -31,7 +31,7 @@ struct __cilkrts_worker;
 #define ALERT_LOOP 0x8000
 
 #ifndef ALERT_LVL
-#define ALERT_LVL 0x3d03 // ALERT_BOOT | ALERT_START | ALERT_REDUCE_ID | ALERT_REDUCE | ALERT_EXCEPT | ALERT_FIBER | ALERT_FIBER_SUMMARY
+#define ALERT_LVL (ALERT_LOOP | ALERT_SYNC | ALERT_STEAL | ALERT_CFRAME) // 0x3d03 // ALERT_BOOT | ALERT_START | ALERT_REDUCE_ID | ALERT_REDUCE | ALERT_EXCEPT | ALERT_FIBER | ALERT_FIBER_SUMMARY
 #endif
 
 extern CHEETAH_INTERNAL unsigned int alert_level;
@@ -128,7 +128,11 @@ CHEETAH_INTERNAL extern const char *const __cilkrts_assertion_failed;
 
 #else
 #define CILK_ASSERT(w, ex)
+#define CILK_ASSERT_POINTER_EQUAL(w, P1, P2)
+#define CILK_ASSERT_ZERO(w, ex, FMT)
+#define CILK_ASSERT_INDEX_ZERO(w, LEFT, I, RIGHT, FMT)
 #define CILK_ASSERT_G(ex)
+#define CILK_ASSERT_G_LE(A, B, FMT)
 #define CILK_ABORT(w, msg)
 #define CILK_ABORT_G(msg)
 #define WHEN_CILK_DEBUG(ex)

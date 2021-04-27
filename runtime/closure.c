@@ -15,6 +15,7 @@ void Closure_assert_alienation(__cilkrts_worker *const w, Closure *t) {
     CILK_ASSERT(w, t->mutex_owner != w->self);
 }
 
+#undef Closure_checkmagic
 void Closure_checkmagic(__cilkrts_worker *const w, Closure *t) {
     switch (t->status) {
     case CLOSURE_RUNNING:

@@ -7,13 +7,14 @@
 
 #include "../runtime/cilk2c.h"
 #include "../runtime/cilk2c_inlined.c"
-#include "getoptions.h"
 
+#include "getoptions.h"
 #include "ktiming.h"
 
-#ifndef TIMING_COUNT
-#define TIMING_COUNT 1
-#endif
+extern size_t ZERO;
+
+void __attribute__((weak)) dummy(void *p) { return; }
+
 /*
  * void daxpy(int n, double a, double *x, double *y) {
  *   cilk_for (int i = 0; i < n; ++i) {
@@ -45,19 +46,25 @@ static void __attribute__ ((noinline)) daxpy_loop_helper(double *y, const double
         } while (status == SUCCESS_ITERATION);
     }
 
-    if(status == SUCCESS_LAST_ITERATION) {
+    if (status == SUCCESS_LAST_ITERATION) {
         // LOOP BODY
         for (uint64_t j = i * grainsize; j < (i + 1) * grainsize; j++) {
             y[j] += a * x[j];
         }
         // END OF LOOP BODY
     }
+
+    // local loop frame might have been modified if we have a nested loop inside loop body
+    __cilkrts_get_tls_worker()->local_loop_frame = (__cilkrts_loop_frame *) inner_lf.sf.call_parent;
+    CILK_ASSERT(__cilkrts_get_tls_worker(), local_lf() == inner_lf.parentLF);
+
     __cilkrts_pop_frame(&inner_lf.sf);
     __cilkrts_leave_frame(&inner_lf.sf);
 }
 
 void daxpy(double *y, double *x, double a, uint64_t n, uint64_t grainsize) {
 
+    dummy(alloca(ZERO));
     __cilkrts_loop_frame lf;
     uint64_t end = n / grainsize, rem = n % grainsize;
     __cilkrts_enter_loop_frame(&lf, 0, end);

@@ -977,7 +977,6 @@ static Closure *promote_child(__cilkrts_worker *const w,
         CILK_ASSERT(w, cl->frame == NULL);
         cl->frame = frame_to_steal;
         spawn_parent = cl;
-        __cilkrts_set_stolen(spawn_parent->frame);
     } else { // spawning a function and stacklet never gotten stolen before
         // cl->frame could either be NULL or some older frame (e.g.,
         // cl->frame was stolen and resumed, it calls another frame which
@@ -986,7 +985,6 @@ static Closure *promote_child(__cilkrts_worker *const w,
         // the left-most frame (the one to be stolen and resume).
         spawn_parent = Closure_create(w);
         spawn_parent->frame = frame_to_steal;
-        __cilkrts_set_stolen(frame_to_steal);
         Closure_set_status(w, spawn_parent, CLOSURE_RUNNING);
 
         // ANGE: this is only temporary; will reset this after the stack has
@@ -1076,7 +1074,7 @@ static void finish_promote(__cilkrts_worker *const w,
 
     Closure_assert_ownership(w, parent);
     CILK_ASSERT(w, parent->has_cilk_callee == 0);
-    CILK_ASSERT(w, __cilkrts_stolen(parent->frame));
+    __cilkrts_set_stolen(parent->frame);
 
     // ANGE: if there are more frames to promote, the youngest frame that we
     // are stealing (i.e., parent) has been promoted and its closure call_parent
@@ -1390,7 +1388,7 @@ __attribute__((noreturn)) void longjmp_to_runtime(__cilkrts_worker *w) {
    sync at the end of a function.  It is only called if compiled code
    finds CILK_FRAME_UNSYCHED is set.  It returns SYNC_READY if there
    are no children and execution can continue.  Otherwise it returns
-   SYNC_NOT_READY to suspend the frame. */
+   SYNC_NOT_READY tonq suspend the frame. */
 int Cilk_sync(__cilkrts_worker *const w, __cilkrts_stack_frame *frame) {
 
     // cilkrts_alert(SYNC, w, "(Cilk_sync) frame %p", (void *)frame);
