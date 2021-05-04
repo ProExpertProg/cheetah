@@ -115,7 +115,7 @@ __attribute__((always_inline)) void __cilkrts_bump_worker_rank(void) {
 
 // Enter a new Cilk function, i.e., a function that contains a cilk_spawn.  This
 // function must be inlined for correctness.
-__attribute__((always_inline)) void
+static inline __attribute__((always_inline)) void
 __cilkrts_enter_frame(__cilkrts_stack_frame *sf) {
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
     sf->flags = 0;
@@ -124,6 +124,7 @@ __cilkrts_enter_frame(__cilkrts_stack_frame *sf) {
         w = __cilkrts_get_tls_worker();
     }
     cilkrts_alert(CFRAME, w, "__cilkrts_enter_frame %p", (void *)sf);
+//    printf("ENTER FRAME\n");
 
     sf->magic = frame_magic;
     sf->call_parent = w->current_stack_frame;
@@ -156,7 +157,7 @@ __cilkrts_enter_frame(__cilkrts_stack_frame *sf) {
 // This function initializes worker and stack_frame structures.  Because this
 // routine will always be executed by a Cilk worker, it is optimized compared to
 // its counterpart, __cilkrts_enter_frame.
-__attribute__((always_inline)) void
+static inline __attribute__((always_inline)) void
 __cilkrts_enter_frame_fast(__cilkrts_stack_frame *sf) {
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
     cilkrts_alert(CFRAME, w, "__cilkrts_enter_frame_fast %p", (void *)sf);
@@ -189,7 +190,7 @@ __cilkrts_enter_frame_fast(__cilkrts_stack_frame *sf) {
 #endif
 }
 
-__attribute__((always_inline))
+static inline __attribute__((always_inline))
 void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf, __uint64_t start, __uint64_t end) {
     // Needs to come before get_worker, as the worker might be null before we cilkify
     __cilkrts_enter_frame(&lf->sf);
@@ -209,7 +210,7 @@ void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf, __uint64_t start, __ui
     CILK_ASSERT(w, __cilkrts_is_loop(&lf->sf));
 }
 
-__attribute__((always_inline))
+static inline __attribute__((always_inline))
 void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
 
@@ -228,7 +229,7 @@ void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
 
 
 // this function should ONLY be called for the first iteration, before we push the loop frame on the deque
-__attribute__((always_inline))
+static inline __attribute__((always_inline))
 __cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame *lf, __uint64_t *index) {
 
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
@@ -266,7 +267,7 @@ __cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_f
 
 // Detach the given Cilk stack frame, allowing other Cilk workers to steal the
 // parent frame.
-__attribute__((always_inline))
+static inline __attribute__((always_inline))
 void __cilkrts_detach(__cilkrts_stack_frame *sf) {
     __cilkrts_worker *w =
         atomic_load_explicit(&sf->worker, memory_order_relaxed);
@@ -289,7 +290,7 @@ void __cilkrts_detach(__cilkrts_stack_frame *sf) {
 }
 
 // inlined by the compiler; this implementation is only used in invoke-main.c
-__attribute__((always_inline))
+static inline __attribute__((always_inline))
 void __cilkrts_save_fp_ctrl_state(__cilkrts_stack_frame *sf) {
     sysdep_save_fp_ctrl_state(sf);
 }
@@ -298,7 +299,7 @@ void __cilkrts_save_fp_ctrl_state(__cilkrts_stack_frame *sf) {
 // __cilkrts_stack_frames, and if popping the last Cilk stack frame, call
 // uncilkify to terminate the Cilkified region.  This function must be inlined
 // for correctness.
-__attribute__((always_inline))
+static inline __attribute__((always_inline))
 void __cilkrts_pop_frame(__cilkrts_stack_frame *sf) {
     __cilkrts_worker *w =
         atomic_load_explicit(&sf->worker, memory_order_relaxed);

@@ -7,15 +7,15 @@
 // ABI functions inlined by the compiler (provided as a bitcode file after
 // compiling runtime) are defined in cilk2c_inline.c.
 // ABI functions not inlined by the compiler are defined in cilk2c.c.
-CHEETAH_API void __cilkrts_enter_frame(__cilkrts_stack_frame *sf);
-CHEETAH_API void __cilkrts_enter_frame_fast(__cilkrts_stack_frame *sf);
-CHEETAH_API void __cilkrts_save_fp_ctrl_state(__cilkrts_stack_frame *sf);
-CHEETAH_API void __cilkrts_detach(__cilkrts_stack_frame *self);
+//CHEETAH_API void __cilkrts_enter_frame(__cilkrts_stack_frame *sf);
+//CHEETAH_API void __cilkrts_enter_frame_fast(__cilkrts_stack_frame *sf);
+//CHEETAH_API void __cilkrts_save_fp_ctrl_state(__cilkrts_stack_frame *sf);
+//CHEETAH_API void __cilkrts_detach(__cilkrts_stack_frame *self);
 CHEETAH_API void __cilkrts_check_exception_raise(__cilkrts_stack_frame *sf);
 CHEETAH_API void __cilkrts_check_exception_resume(__cilkrts_stack_frame *sf);
 CHEETAH_API void __cilkrts_cleanup_fiber(__cilkrts_stack_frame *, int32_t sel);
 CHEETAH_API void __cilkrts_sync(__cilkrts_stack_frame *sf);
-CHEETAH_API void __cilkrts_pop_frame(__cilkrts_stack_frame *sf);
+//CHEETAH_API void __cilkrts_pop_frame(__cilkrts_stack_frame *sf);
 CHEETAH_API void __cilkrts_pause_frame(__cilkrts_stack_frame *sf, char *exn);
 CHEETAH_API void __cilkrts_leave_frame(__cilkrts_stack_frame *sf);
 
@@ -26,9 +26,9 @@ typedef enum __cilkrts_iteration_return {
     FAIL = 2u
 } __cilkrts_iteration_return;
 
-CHEETAH_API void __cilkrts_enter_loop_frame(__cilkrts_loop_frame * lf, __uint64_t start, __uint64_t end);
-CHEETAH_API void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf);
-CHEETAH_API __cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame * lf, __uint64_t *index);
+//CHEETAH_API void __cilkrts_enter_loop_frame(__cilkrts_loop_frame * lf, __uint64_t start, __uint64_t end);
+//CHEETAH_API void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf);
+//CHEETAH_API __cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame * lf, __uint64_t *index);
 CHEETAH_API __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner_loop_frame *lf);
 CHEETAH_API void __cilkrts_leave_loop_frame(__cilkrts_loop_frame * sf);
 
