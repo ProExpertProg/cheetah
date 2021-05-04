@@ -228,6 +228,7 @@ endif()
 # Build the Cheetah ABI as LLVM bitcode
 if (CHEETAH_ENABLE_BITCODE_ABI AND (CMAKE_C_COMPILER_ID STREQUAL "Clang"))
   set(CHEETAH_ABI_BITCODE_FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopencilk-abi.bc")
+  set(CHEETAH_ABI_BITCODE_FILE ${CHEETAH_ABI_BITCODE_FILE} PARENT_SCOPE)
   # Commands to compile the source files for the ABI into bitcode.
   add_library(cheetah_abi_bc_compile OBJECT ${CHEETAH_ABI_SOURCE})
 

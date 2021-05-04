@@ -29,7 +29,7 @@ $(CTESTS): %: %.o ktiming.o getoptions.o
 	$(CC) $^ -o $@ $(RTS_LIBS) $(RTS_LIB_FLAG) $(SAN) -lrt -lpthread -lm
 
 $(CXXTESTS): %: %.o ktiming.o getoptions.o
-	$(CXX) $^ -o $@ $(RTS_LIBS) $(RTS_LIB_FLAG) $(SAN) -lrt -lpthread -lm
+	$(CXX) $^ -v -o $@ $(RTS_LIBS) $(RTS_LIB_FLAG) $(SAN) -lrt -lpthread -lm
 
 $(DIRTESTS):
 	$(MAKE) -C $@ $(TOPASS)
