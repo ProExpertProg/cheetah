@@ -5,9 +5,14 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "cilk2c.h"
+#include "cilk2c_inlined.c"
 #include "scheduler.h"
 #include "readydeque.h"
 #include "local.h"
+
+extern size_t ZERO;
+
+void __attribute__((weak)) dummy(void *p) { return; }
 
 #if INLINE_POP_LF
 #define ATTR_POP_LF __always_inline
@@ -17,9 +22,9 @@
 
 ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner_loop_frame *lf) {
     __cilkrts_worker *w = lf->sf.worker;
-    cilkrts_alert(CFRAME,
-                    w, "(__cilkrts_loop_frame_next) attempting to obtain another iteration for frame %p\n",
-                    lf);
+//    cilkrts_alert(CFRAME,
+//                    w, "(__cilkrts_loop_frame_next) attempting to obtain another iteration for frame %p\n",
+//                    lf);
     CILK_ASSERT(w, CHECK_CILK_FRAME_MAGIC(w->g, &lf->sf));
     CILK_ASSERT(w, lf->sf.worker == __cilkrts_get_tls_worker());
     CILK_ASSERT(w, &lf->sf == w->current_stack_frame);
@@ -97,6 +102,8 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
 }
 
 void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain) {
+
+    dummy(alloca(ZERO));
     __cilkrts_loop_frame lf;
     uint64_t end, rem;
 
@@ -124,9 +131,6 @@ void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, un
 
     CILK_ASSERT(lf.sf.worker, local_lf()->start == local_lf()->end);
 
-//    __cilkrts_stack_frame ** p = alloca(sizeof(__cilkrts_stack_frame*));
-//            *p = &local_lf()->sf;
-//    // try alwaysinline/alloca?
     if (__cilkrts_unsynced(&local_lf()->sf)) {
         __cilkrts_save_fp_ctrl_state(&local_lf()->sf);
         if (!__builtin_setjmp(local_lf()->sf.ctx)) {
@@ -135,9 +139,12 @@ void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, un
     }
 
     __cilkrts_pop_frame(&local_lf()->sf);
-    __cilkrts_leave_loop_frame(local_lf());
+    // cannot refer to local_lf() for this check because w could be null
+    if (__cilkrts_get_tls_worker() != NULL) {
+        __cilkrts_leave_loop_frame(local_lf());
+        CILK_ASSERT(lf.sf.worker, local_lf() == &lf);
+    }
 
-    CILK_ASSERT(lf.sf.worker, local_lf() == &lf);
     if (rem != 0)
         body(data, count - rem, count);
 }
@@ -174,12 +181,14 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
 
     // local loop frame might have been modified if we have a nested loop inside loop body
     inner_lf.sf.worker->local_loop_frame = (__cilkrts_loop_frame *) inner_lf.sf.call_parent;
+    CILK_ASSERT(__cilkrts_get_tls_worker(), local_lf() == inner_lf.parentLF);
 
     __cilkrts_pop_frame(&inner_lf.sf);
     __cilkrts_leave_frame(&inner_lf.sf);
 }
 
 void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain) {
+    dummy(alloca(ZERO));
     __cilkrts_loop_frame lf;
     uint32_t end, rem;
 
@@ -205,6 +214,8 @@ void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count, un
 
     __cilkrts_cilk_loop_helper32(data, body, grain);
 
+    CILK_ASSERT(lf.sf.worker, local_lf()->start == local_lf()->end);
+
     if (__cilkrts_unsynced(&local_lf()->sf)) {
         __cilkrts_save_fp_ctrl_state(&local_lf()->sf);
         if (!__builtin_setjmp(local_lf()->sf.ctx)) {
@@ -213,9 +224,11 @@ void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count, un
     }
 
     __cilkrts_pop_frame(&local_lf()->sf);
-    __cilkrts_leave_loop_frame(local_lf());
-
-    CILK_ASSERT(lf.sf.worker, local_lf() == &lf);
+    // cannot refer to local_lf() for this check because w could be null
+    if (__cilkrts_get_tls_worker() != NULL) {
+        __cilkrts_leave_loop_frame(local_lf());
+        CILK_ASSERT(lf.sf.worker, local_lf() == &lf);
+    }
     if (rem != 0)
         body(data, count - rem, count);
 }

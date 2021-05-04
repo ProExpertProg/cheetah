@@ -33,7 +33,11 @@ double
 ktiming_diff_sec(const clockmark_t* const start, const clockmark_t* const end);
 clockmark_t ktiming_getmark(void);
 void print_runtime(uint64_t *tm_elapsed, int size); 
-void print_runtime_summary(uint64_t *tm_elapsed, int size); 
+void print_runtime_summary(uint64_t *tm_elapsed, int size);
+
+#ifndef TIMING_COUNT
+#define TIMING_COUNT 1
+#endif
 
 #endif  // _KTIMING_H_
 

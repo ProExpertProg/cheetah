@@ -5,7 +5,11 @@
 #include <stdio.h>
 #include "stdint.h"
 #include "cilk2c.h"
-#include "scheduler.h"
+#include "cilk2c_inlined.c"
+
+extern size_t ZERO;
+
+void __attribute__((weak)) dummy(void *p) { return; }
 
 typedef void (*__cilk_abi_f64_t)(void *data, int64_t low, int64_t high);
 
@@ -23,10 +27,9 @@ cilk_loop_helper64(uint64_t low, uint64_t high, void *data, __cilk_abi_f64_t bod
 }
 
 void cilk_for_root64(uint64_t low, uint64_t high, void *data, __cilk_abi_f64_t body, int grainsize) {
-
+    dummy(alloca(ZERO));
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
-
 
     uint64_t len = high - low;
     while (len > grainsize) {
@@ -53,7 +56,8 @@ void cilk_for_root64(uint64_t low, uint64_t high, void *data, __cilk_abi_f64_t b
     }
 
     __cilkrts_pop_frame(&sf);
-    __cilkrts_leave_frame(&sf);
+    if (0 != sf.flags)
+        __cilkrts_leave_frame(&sf);
 
 }
 
@@ -82,9 +86,11 @@ cilk_loop_helper32(uint32_t low, uint32_t high, void *data, __cilk_abi_f32_t bod
 
 void cilk_for_root32(uint32_t low, uint32_t high, void *data, __cilk_abi_f32_t body, int grainsize) {
 
+    dummy(alloca(ZERO));
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
 
+//    printf("Cilk for DC\n");
 
     uint32_t len = high - low;
     while (len > grainsize) {
@@ -111,7 +117,8 @@ void cilk_for_root32(uint32_t low, uint32_t high, void *data, __cilk_abi_f32_t b
     }
 
     __cilkrts_pop_frame(&sf);
-    __cilkrts_leave_frame(&sf);
+    if (0 != sf.flags)
+        __cilkrts_leave_frame(&sf);
 
 }
 

@@ -76,8 +76,10 @@ static void print_runtime_helper(uint64_t *nsec_elapsed, int size,
     for (i = 0; i < size; i++) {
         total += nsec_elapsed[i];
         if (size > 1) {
-            sq_total += nsec_elapsed[i] * nsec_elapsed[i];
+            sq_total += nsec_elapsed[i] * nsec_elapsed[i] / (size - 1);
         }
+        if(nsec_elapsed[i] < min_t)
+            min_t = nsec_elapsed[i];
 
         if (!summary) {
             printf("Running time %d: %gs\n", (i + 1),
@@ -87,7 +89,8 @@ static void print_runtime_helper(uint64_t *nsec_elapsed, int size,
     ave = total / size;
 
     if (size > 1) {
-        std_dev = sqrt((sq_total - total * ave) / (size - 1));
+        // sqrt( <x^2> - <x>^2)
+        std_dev = sqrt(sq_total - total  / (size - 1) * ave);
     }
 
     qsort(nsec_elapsed, TIMING_COUNT, sizeof(uint64_t), cmp_uint64_t);
