@@ -15,4 +15,7 @@ typedef struct __cilkrts_inner_loop_frame __cilkrts_inner_loop_frame;
 
 #define NO_WORKER 0xffffffffu /* type worker_id */
 
+// Constant representing invalid worker.
+#define INVALID (__cilkrts_worker *)0xbfbfbfbfbf
+
 #endif /* _CILK_TYPES_H */

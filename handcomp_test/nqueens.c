@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../runtime/cilk2c.h"
+#include "../runtime/cilk2c_inlined.c"
 #include "ktiming.h"
 
 extern size_t ZERO;
@@ -32,7 +34,7 @@ void __attribute__((weak)) dummy(void *p) { return; }
  * <a> contains array of <n> queen positions.  Returns 1
  * if none of the queens conflict, and returns 0 otherwise.
  */
-int ok (int n, char *a) {
+static int ok (int n, char *a) {
 
     int i, j;
     char p, q;

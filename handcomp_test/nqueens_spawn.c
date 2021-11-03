@@ -50,27 +50,19 @@ int nqueens(int n, int j, char *a) {
         if(ok (j + 1, b)) {
 
             /* count[i] = cilk_spawn nqueens(n, j + 1, b); */
-            __cilkrts_save_fp_ctrl_state(&sf);
-            if(!__builtin_setjmp(sf.ctx)) {
-                nqueens_spawn_helper(&(count[i]), n, j+1, b);
+            if (!__cilk_prepare_spawn(&sf)) {
+                nqueens_spawn_helper(&(count[i]), n, j + 1, b);
             }
         }
     }
     /* cilk_sync */
-    if(sf.flags & CILK_FRAME_UNSYNCHED) {
-      __cilkrts_save_fp_ctrl_state(&sf);
-      if(!__builtin_setjmp(sf.ctx)) {
-        __cilkrts_sync(&sf);
-      }
-    }
+    __cilk_sync_nothrow(&sf);
 
     for(i = 0; i < n; i++) {
         solNum += count[i];
     }
 
-    __cilkrts_pop_frame(&sf);
-    if (0 != sf.flags)
-        __cilkrts_leave_frame(&sf);
+    __cilk_parent_epilogue(&sf);
 
     return solNum;
 }
@@ -79,9 +71,8 @@ static void __attribute__ ((noinline))
 nqueens_spawn_helper(int *count, int n, int j, char *a) {
 
     __cilkrts_stack_frame sf;
-    __cilkrts_enter_frame_fast(&sf);
+    __cilkrts_enter_frame_helper(&sf);
     __cilkrts_detach(&sf);
     *count = nqueens(n, j, a);
-    __cilkrts_pop_frame(&sf);
-    __cilkrts_leave_frame(&sf);
+    __cilk_helper_epilogue(&sf);
 }
