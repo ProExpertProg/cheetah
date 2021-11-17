@@ -17,7 +17,7 @@ add_compile_definitions(TIMING_COUNT=${TIMING_COUNT})
 
 add_compile_options(-Wall -fno-omit-frame-pointer ${HANDCOMP_COMPILE_OPT})
 
-set(LIBRARIES opencilk rt pthread m)
+set(LIBRARIES opencilk-${CHEETAH_DEFAULT_TARGET_ARCH} rt pthread m)
 
 #===============================================================================
 # Executables
