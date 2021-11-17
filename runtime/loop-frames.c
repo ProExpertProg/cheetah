@@ -96,10 +96,6 @@ static void copy_loop_frame(__cilkrts_worker *w, __cilkrts_loop_frame *original,
     // sp gets set to ORIG_RSP so we don't care.
     memcpy(original->sf.ctx, current->sf.ctx, sizeof(jmpbuf));
 
-#ifdef CHEETAH_SAVE_MXCSR
-    original->sf.mxcsr = current->sf.mxcsr;
-#endif
-
     original->sf.magic = current->sf.magic;
 
 

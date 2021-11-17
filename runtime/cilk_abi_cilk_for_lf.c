@@ -57,7 +57,7 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
         if (start > __atomic_load_n(&pLoopFrame->end, __ATOMIC_SEQ_CST)) {
             pLoopFrame->start--;
             deque_unlock_self(w);
-            return FAIL;
+            return FAIL_ITERATION;
         }
         deque_unlock_self(w);
     }
@@ -97,8 +97,7 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
     inner_lf.sf.worker->local_loop_frame = (__cilkrts_loop_frame *) inner_lf.sf.call_parent;
     CILK_ASSERT(__cilkrts_get_tls_worker(), local_lf() == inner_lf.parentLF);
 
-    __cilkrts_pop_frame(&inner_lf.sf);
-    __cilkrts_leave_frame(&inner_lf.sf);
+    __cilk_helper_epilogue(&inner_lf.sf);
 }
 
 void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain) {
@@ -124,26 +123,28 @@ void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, un
     __cilkrts_enter_loop_frame(&lf, 0, end);
 
     // cilk_for(int i = low; i < high; ++i) {
-    __cilkrts_save_fp_ctrl_state(&lf.sf);
-    __builtin_setjmp(lf.sf.ctx); // the same behavior first time or not
+
+    // Contains the setjmp. We continue to the loop helper in both setjmp cases.
+    __cilk_prepare_spawn(&lf.sf);
 
     __cilkrts_cilk_loop_helper64(data, body, grain);
 
     CILK_ASSERT(lf.sf.worker, local_lf()->start == local_lf()->end);
 
+    // cannot use __cilkrts_sync because we cannot allow local_lf to be stored in a variable on the stack
+    // maybe there's a way of doing that? still need setjmp in this function though
     if (__cilkrts_unsynced(&local_lf()->sf)) {
-        __cilkrts_save_fp_ctrl_state(&local_lf()->sf);
-        if (!__builtin_setjmp(local_lf()->sf.ctx)) {
+        if (__builtin_setjmp(local_lf()->sf.ctx) == 0) {
+            sysdep_save_fp_ctrl_state(&local_lf()->sf);
             __cilkrts_sync(&local_lf()->sf);
+        } else {
+            sanitizer_finish_switch_fiber();
         }
     }
 
-    __cilkrts_pop_frame(&local_lf()->sf);
-    // cannot refer to local_lf() for this check because w could be null
-    if (__cilkrts_get_tls_worker() != NULL) {
-        __cilkrts_leave_loop_frame(local_lf());
-        CILK_ASSERT(lf.sf.worker, local_lf() == &lf);
-    }
+    __cilkrts_leave_loop_frame(local_lf());
+    CILK_ASSERT(lf.sf.worker, local_lf() == &lf);
+
 
     if (rem != 0)
         body(data, count - rem, count);
@@ -151,7 +152,7 @@ void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, un
 
 /**
  * 32-bit versions
- */
+ *-/
 
 typedef void (*__cilk_abi_f32_t)(void *data, int32_t low, int32_t high);
 
@@ -232,3 +233,5 @@ void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count, un
     if (rem != 0)
         body(data, count - rem, count);
 }
+
+*/

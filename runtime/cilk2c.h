@@ -101,7 +101,7 @@ CHEETAH_INTERNAL uint64_t __cilkrts_cilk_for_grainsize_64(uint64_t n);
 typedef enum __cilkrts_iteration_return {
     SUCCESS_ITERATION = 0u,
     SUCCESS_LAST_ITERATION = 1u,
-    FAIL = 2u
+    FAIL_ITERATION = 2u
 } __cilkrts_iteration_return;
 
 CHEETAH_API void __cilkrts_enter_loop_frame(__cilkrts_loop_frame * lf, __uint64_t start, __uint64_t end);

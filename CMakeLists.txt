@@ -208,5 +208,4 @@ add_subdirectory(runtime)
 
 if (CHEETAH_INCLUDE_TESTS)
   add_subdirectory(handcomp_test)
-  add_subdirectory(bench)
 endif()
