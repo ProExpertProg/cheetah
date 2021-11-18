@@ -67,12 +67,10 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
     return SUCCESS_ITERATION;
 }
 
-typedef void (*__cilk_abi_f64_t)(void *data, int64_t low, int64_t high);
-
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
 __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int grainsize) {
-    uint64_t i;
+    int64_t i;
     __cilkrts_inner_loop_frame inner_lf;
     __cilkrts_enter_inner_loop_frame(&inner_lf);
 
@@ -97,14 +95,17 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
     inner_lf.sf.worker->local_loop_frame = (__cilkrts_loop_frame *) inner_lf.sf.call_parent;
     CILK_ASSERT(__cilkrts_get_tls_worker(), local_lf() == inner_lf.parentLF);
 
-    __cilk_helper_epilogue(&inner_lf.sf);
+    if (inner_lf.sf.flags & CILK_FRAME_DETACHED)
+        __cilk_helper_epilogue(&inner_lf.sf);
+    else
+        __cilk_parent_epilogue(&inner_lf.sf);
 }
 
-void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain) {
+void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, int64_t count, unsigned int grain) {
 
     dummy(alloca(ZERO));
     __cilkrts_loop_frame lf;
-    uint64_t end, rem;
+    int64_t end, rem;
 
     if (grain == 1) {
         end = count;
@@ -143,8 +144,7 @@ void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, un
     }
 
     __cilkrts_leave_loop_frame(local_lf());
-    CILK_ASSERT(lf.sf.worker, local_lf() == &lf);
-
+    CILK_ASSERT(lf.sf.worker, __cilkrts_get_tls_worker() == NULL || local_lf() == &lf);
 
     if (rem != 0)
         body(data, count - rem, count);
@@ -153,8 +153,6 @@ void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, un
 /**
  * 32-bit versions
  *-/
-
-typedef void (*__cilk_abi_f32_t)(void *data, int32_t low, int32_t high);
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
@@ -188,7 +186,7 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
     __cilkrts_leave_frame(&inner_lf.sf);
 }
 
-void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain) {
+void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, int32_t count, unsigned int grain) {
     dummy(alloca(ZERO));
     __cilkrts_loop_frame lf;
     uint32_t end, rem;

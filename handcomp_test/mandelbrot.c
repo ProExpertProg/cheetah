@@ -19,10 +19,10 @@ struct innerData {
     double x0, y0, xstep, ystep;
     int width, max_depth;
     unsigned char *output;
-    uint64_t j; // also grainsize for loop
+    int64_t j; // also grainsize for loop
 };
 
-void innerBody(uint64_t i, void *data) {
+void innerBody(int64_t i, void *data) {
     struct innerData *d = data;
 
     double z_real = d->x0 + i * d->xstep;
@@ -48,11 +48,11 @@ void innerBody(uint64_t i, void *data) {
     d->output[d->j * d->width + i] = (unsigned char) ((depth / d->max_depth) * 255);
 }
 #ifndef SERIAL
-void outerBody(uint64_t j, void *data) {
+void outerBody(int64_t j, void *data) {
     struct innerData *d = data;
     struct innerData id = *d;
     id.j = j;
-    cilk_for(0, id.width, &id, innerBody, d->j);
+    cilk_for(id.width, &id, innerBody, d->j);
 }
 #endif
 
@@ -76,7 +76,7 @@ mandelbrot(double x0, double y0, double x1, double y1, int width, int height, in
         }
     }
 #else
-    cilk_for(0, height, &outerD, outerBody, 1);
+    cilk_for(height, &outerD, outerBody, 1);
 #endif
     return output;
 }
@@ -91,16 +91,16 @@ int usage(void) {
 const char *specifiers[] = {"-x", "-y", "-d", "-c", "-g", "-h", 0};
 int opt_types[] = {LONGARG, LONGARG, INTARG, BOOLARG, LONGARG, BOOLARG, 0};
 
-int cilk_main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 
     double x0 = -2.5;
     double y0 = -0.875;
     double x1 = 1;
     double y1 = 0.875;
-    uint64_t height = 1024, width = 2048;
+    int height = 1024, width = 2048;
 
     int max_depth = 100;
-    uint64_t grainsize = 1;
+    unsigned int grainsize = 1;
 
     int help = 0, check = 0;
 
@@ -122,7 +122,7 @@ int cilk_main(int argc, char *argv[]) {
         begin = ktiming_getmark();
         mandelbrot(x0, y0, x1, y1, width, height, max_depth, output, grainsize);
         end = ktiming_getmark();
-        running_time[t] = ktiming_diff_usec(&begin, &end);
+        running_time[t] = ktiming_diff_nsec(&begin, &end);
         printf("Output: %x\n", output[3]); // otherwise the whole mandelbrot function gets optimized away in the case of the serial loop
     }
 

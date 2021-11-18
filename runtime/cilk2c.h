@@ -96,6 +96,15 @@ CHEETAH_INTERNAL uint16_t __cilkrts_cilk_for_grainsize_16(uint16_t n);
 CHEETAH_INTERNAL uint32_t __cilkrts_cilk_for_grainsize_32(uint32_t n);
 CHEETAH_INTERNAL uint64_t __cilkrts_cilk_for_grainsize_64(uint64_t n);
 
+// ABI functions for cilk_for loops
+typedef void (*__cilk_abi_f64_t)(void *data, int64_t low, int64_t high);
+
+void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, int64_t count, unsigned int grain);
+
+typedef void (*__cilk_abi_f32_t)(void *data, int32_t low, int32_t high);
+
+void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, int32_t count, unsigned int grain);
+
 
 // The return type of the functions obtaining iterations
 typedef enum __cilkrts_iteration_return {
@@ -106,7 +115,7 @@ typedef enum __cilkrts_iteration_return {
 
 CHEETAH_API void __cilkrts_enter_loop_frame(__cilkrts_loop_frame * lf, __uint64_t start, __uint64_t end);
 CHEETAH_API void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf);
-CHEETAH_API __cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame * lf, __uint64_t *index);
+CHEETAH_API __cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame * lf, int64_t *index);
 CHEETAH_API __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner_loop_frame *lf);
 CHEETAH_API void __cilkrts_leave_loop_frame(__cilkrts_loop_frame * sf);
 

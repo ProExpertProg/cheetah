@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "../runtime/cilk2c.h"
 #include "ktiming.h"
 #include "getoptions.h"
 #include "cilk_for.h"
@@ -25,28 +24,28 @@ static void m_transpose_serial(int *B, const int *A, int n) {
 }
 
 typedef struct {
-    uint n;
+    int64_t n;
     int *B;
     const int *A;
 } outerData;
 
 typedef struct {
     const outerData *o;
-    uint64_t i;
+    int64_t i;
 } innerData;
 
-void innerBody(uint64_t j, void *data) {
+void innerBody(int64_t j, void *data) {
     const innerData *d = data;
     d->o->B[j * d->o->n + d->i] = d->o->A[d->i * d->o->n + j];
 }
 
-void outerBody(uint64_t i, void *data) {
+void outerBody(int64_t i, void *data) {
     const outerData *d = data;
     innerData id = {.o=d, .i=i};
 #ifdef MTRANS_PARALLELIZE_INNER
-    cilk_for(i, d->n, &id, innerBody, 1);
+    __(i, d->n, &id, innerBody, 1);
 #else
-    for (int j = i; j < d->n; ++j) {
+    for (int64_t j = i; j < d->n; ++j) {
         innerBody(j, &id);
     }
 #endif
@@ -54,7 +53,7 @@ void outerBody(uint64_t i, void *data) {
 
 static void m_transpose(int *B, const int *A, int n) {
     outerData d = {.n=n, .A=A, .B=B};
-    cilk_for(0, n, &d, outerBody, 1);
+    cilk_for(n, &d, outerBody, 1);
 }
 
 static void rand_matrix(int *dest, int n) {
@@ -88,7 +87,7 @@ static void test_mtrans(int n, int check) {
         begin = ktiming_getmark();
         m_transpose(B, A, n);
         end = ktiming_getmark();
-        running_time[i] = ktiming_diff_usec(&begin, &end);
+        running_time[i] = ktiming_diff_nsec(&begin, &end);
     }
     print_runtime(running_time, TIMING_COUNT);
 
@@ -117,7 +116,7 @@ static int is_power_of_2(int n) {
 const char *specifiers[] = {"-n", "-c", "-h", 0};
 int opt_types[] = {LONGARG, BOOLARG, BOOLARG, 0};
 
-int cilk_main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 
     long size;
     int help, check;

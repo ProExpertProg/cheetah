@@ -15,6 +15,9 @@
 #define TRUE 1
 #define FALSE 0
 
+extern size_t ZERO;
+void __attribute__((weak)) dummy(void *p) { return; }
+
 unsigned int randomSeed = 1;
 
 static void mm_dac_serial(int *C, const int *A, const int *B, int n, int length) {
@@ -60,13 +63,11 @@ static void mm_dac_serial(int *C, const int *A, const int *B, int n, int length)
 __attribute__((noinline)) static void
 mm_dac_spawn_helper(int *C, const int *A, const int *B, int n, int length, int n_C);
 
-static void zero_matrix(int *dest, int n);
-
 typedef struct {
     int *dst, *src, length, n_C;
 } lData;
 
-static void body(uint64_t i, void *data) {
+static void body(int64_t i, void *data) {
     lData *d = data;
     for (int j = 0; j < d->length; ++j) {
         d->dst[i * d->n_C + j] += d->src[i * d->length + j]; // src is only len x len
@@ -75,7 +76,7 @@ static void body(uint64_t i, void *data) {
 
 static void parallel_madd(int *dst, int *src, int length, int n_C) {
     lData d = {.dst=dst, .src=src, .length=length, .n_C=n_C};
-    cilk_for(0, length, &d, body, 1);
+    cilk_for(length, &d, body, 1);
 }
 
 /**
@@ -87,11 +88,16 @@ static void parallel_madd(int *dst, int *src, int length, int n_C) {
  **/
 static void mm_dac(int *C, const int *A, const int *B, int n, int length, int n_C) {
 
-    if (length == 1) {
-        C[0] += A[0] * B[0];
+    if(length < THRESHOLD) {
+        // Use a loop for small matrices
+        for (int i = 0; i < length; i++)
+            for (int j = 0; j < length; j++)
+                for (int k = 0; k < length; k++)
+                    C[i*n+j] += A[i*n+k] * B[k*n+j];
         return;
     }
-    alloca(ZERO);
+
+    dummy(alloca(ZERO));
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
 
@@ -124,60 +130,45 @@ static void mm_dac(int *C, const int *A, const int *B, int n, int length, int n_
     int const *B11 = B + n * mid + mid;
 
     /* cilk_spawn mm_dac(C00, A00, B00, n, mid, n_C); */
-    __cilkrts_save_fp_ctrl_state(&sf);
-    if (!__builtin_setjmp(sf.ctx)) {
+    if (!__cilk_prepare_spawn(&sf)) {
         mm_dac_spawn_helper(C00, A00, B00, n, mid, n_C);
     }
 
     /* cilk_spawn mm_dac(C01, A00, B01, n, mid, n_C); */
-    __cilkrts_save_fp_ctrl_state(&sf);
-    if (!__builtin_setjmp(sf.ctx)) {
+    if (!__cilk_prepare_spawn(&sf)) {
         mm_dac_spawn_helper(C01, A00, B01, n, mid, n_C);
     }
 
     /* cilk_spawn mm_dac(C10, A10, B00, n, mid, n_C); */
-    __cilkrts_save_fp_ctrl_state(&sf);
-    if (!__builtin_setjmp(sf.ctx)) {
+    if (!__cilk_prepare_spawn(&sf)) {
         mm_dac_spawn_helper(C10, A10, B00, n, mid, n_C);
     }
     /* cilk_spawn mm_dac(C11, A10, B01, n, mid, n_C); */
-    __cilkrts_save_fp_ctrl_state(&sf);
-    if (!__builtin_setjmp(sf.ctx)) {
+    if (!__cilk_prepare_spawn(&sf)) {
         mm_dac_spawn_helper(C11, A10, B01, n, mid, n_C);
     }
 
     /* cilk_spawn mm_dac(D00, A01, B10, n, mid, n_D); */
-    __cilkrts_save_fp_ctrl_state(&sf);
-    if (!__builtin_setjmp(sf.ctx)) {
+    if (!__cilk_prepare_spawn(&sf)) {
         mm_dac_spawn_helper(D00, A01, B10, n, mid, n_D);
     }
 
     /* cilk_spawn mm_dac(D01, A01, B11, n, mid, n_D); */
-    __cilkrts_save_fp_ctrl_state(&sf);
-    if (!__builtin_setjmp(sf.ctx)) {
+    if (!__cilk_prepare_spawn(&sf)) {
         mm_dac_spawn_helper(D01, A01, B11, n, mid, n_D);
     }
 
     /* cilk_spawn mm_dac(D10, A11, B10, n, mid, n_D); */
-    __cilkrts_save_fp_ctrl_state(&sf);
-    if (!__builtin_setjmp(sf.ctx)) {
+    if (!__cilk_prepare_spawn(&sf)) {
         mm_dac_spawn_helper(D10, A11, B10, n, mid, n_D);
     }
     mm_dac(D11, A11, B11, n, mid, n_D);
 
-    /* cilk_sync */
-    if (sf.flags & CILK_FRAME_UNSYNCHED) {
-        __cilkrts_save_fp_ctrl_state(&sf);
-        if (!__builtin_setjmp(sf.ctx)) {
-            __cilkrts_sync(&sf);
-        }
-    }
+    __cilk_sync_nothrow(&sf);
 
     parallel_madd(C, D, length, n_C);
-
     free(D);
-    __cilkrts_pop_frame(&sf);
-    __cilkrts_leave_frame(&sf);
+    __cilk_parent_epilogue(&sf);
 }
 
 static void zero_matrix(int *dest, int n);
@@ -186,11 +177,10 @@ __attribute__((noinline))
 static void mm_dac_spawn_helper(int *C, const int *A, const int *B, int n, int length, int n_C) {
 
     __cilkrts_stack_frame sf;
-    __cilkrts_enter_frame_fast(&sf);
+    __cilkrts_enter_frame_helper(&sf);
     __cilkrts_detach(&sf);
     mm_dac(C, A, B, n, length, n_C);
-    __cilkrts_pop_frame(&sf);
-    __cilkrts_leave_frame(&sf);
+    __cilk_helper_epilogue(&sf);
 }
 
 static void rand_matrix(int *dest, int n) {
@@ -204,14 +194,12 @@ static void zero_matrix(int *dest, int n) {
 }
 
 #if CHECK_RESULT
-
 static int are_equal_matrices(const int *a, const int *b, int n) {
     for (int i = 0; i < n * n; ++i)
         if (a[i] != b[i])
             return FALSE;
     return TRUE;
 }
-
 #endif
 
 static void test_mm(int n, int check) {
@@ -230,7 +218,7 @@ static void test_mm(int n, int check) {
         begin = ktiming_getmark();
         mm_dac(C, A, B, n, n, n);
         end = ktiming_getmark();
-        running_time[i] = ktiming_diff_usec(&begin, &end);
+        running_time[i] = ktiming_diff_nsec(&begin, &end);
     }
     print_runtime(running_time, TIMING_COUNT);
 
@@ -261,7 +249,7 @@ static int is_power_of_2(int n) {
 const char *specifiers[] = {"-n", "-c", "-h", 0};
 int opt_types[] = {LONGARG, BOOLARG, BOOLARG, 0};
 
-int cilk_main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 
     long size;
     int help, check;

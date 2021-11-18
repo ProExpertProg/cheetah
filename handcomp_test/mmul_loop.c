@@ -24,25 +24,25 @@ static void mmul_serial(int *C, const int *A, const int *B, int n) {
 }
 
 typedef struct {
-    uint n;
+    int64_t n;
     int *C;
     const int *A, *B;
 } outerData;
 
 typedef struct {
     const outerData *o;
-    uint64_t i, k;
+    int64_t i, k;
 } innerData;
 
-void innerBody(uint64_t j, void *data) {
+void innerBody(int64_t j, void *data) {
     const innerData *d = data;
-    uint n = d->o->n;
-    uint64_t i = d->i, k = d->k;
+    int64_t n = d->o->n;
+    int64_t i = d->i, k = d->k;
 
     d->o->C[i * n + j] += d->o->A[i * n + k] * d->o->B[k * n + j];
 }
 
-void outerBody(uint64_t i, void *data) {
+void outerBody(int64_t i, void *data) {
     const outerData *d = data;
     for (int k = 0; k < d->n; k++) {
         innerData id = {.o=d, .i=i, .k=k};
@@ -58,7 +58,7 @@ void outerBody(uint64_t i, void *data) {
 
 static void mmul(int *C, const int *A,const int *B, int n) {
     outerData d = {.n=n, .A=A, .B=B, .C=C};
-    cilk_for(0, n, &d, outerBody, 1);
+    cilk_for(n, &d, outerBody, 1);
 }
 
 static void rand_matrix(int *dest, int n) {
@@ -94,7 +94,7 @@ static void test_mmul(int n, int check) {
         begin = ktiming_getmark();
         mmul(C, A, B, n);
         end = ktiming_getmark();
-        running_time[i] = ktiming_diff_usec(&begin, &end);
+        running_time[i] = ktiming_diff_nsec(&begin, &end);
     }
     print_runtime(running_time, TIMING_COUNT);
 
@@ -123,7 +123,7 @@ static int is_power_of_2(int n) {
 const char *specifiers[] = {"-n", "-c", "-h", 0};
 int opt_types[] = {LONGARG, BOOLARG, BOOLARG, 0};
 
-int cilk_main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 
     long size;
     int help, check;

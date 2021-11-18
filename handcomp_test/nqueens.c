@@ -33,7 +33,7 @@ void __attribute__((weak)) dummy(void *p) { return; }
  * <a> contains array of <n> queen positions.  Returns 1
  * if none of the queens conflict, and returns 0 otherwise.
  */
-static int ok (int n, char *a) {
+int ok (int n, char *a) {
 
     int i, j;
     char p, q;

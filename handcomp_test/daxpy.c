@@ -6,11 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../runtime/cilk2c.h"
-#include "../runtime/cilk2c_inlined.c"
-
 #include "getoptions.h"
 #include "ktiming.h"
+#include "cilk_for.h"
 
 extern size_t ZERO;
 
@@ -25,69 +23,19 @@ void __attribute__((weak)) dummy(void *p) { return; }
  *
  */
 
-typedef void (*ForBody)(uint64_t i, void *data);
-
 typedef struct {
     double *y, *x, a;
-} data;
-
-static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t high, void *data, uint64_t grainsize);
-
-void cilk_loop_recursive(uint64_t low, uint64_t high, void *d, uint64_t grainsize) {
-
-    dummy(alloca(ZERO));
-    __cilkrts_stack_frame sf;
-    __cilkrts_enter_frame(&sf);
+} data_t;
 
 
-    uint64_t len = high - low;
-    while (len > grainsize) {
-        uint64_t mid = low + len / 2;
-
-        // cilk_spawn cilk_loop_helper()
-        __cilkrts_save_fp_ctrl_state(&sf);
-        if(!__builtin_setjmp(sf.ctx)) {
-            cilk_loop_helper(low, mid, d, grainsize);
-        }
-
-        low = mid;
-        len = high - low;
-    }
-
-    for (int i = low; i < high; ++i) {
-        // body
-        data *_d = (data *) d;
-        _d->y[i] += _d->a * _d->x[i];
-    }
-
-    /* cilk_sync */
-    if (sf.flags & CILK_FRAME_UNSYNCHED) {
-        __cilkrts_save_fp_ctrl_state(&sf);
-        if (!__builtin_setjmp(sf.ctx)) {
-            __cilkrts_sync(&sf);
-        }
-    }
-
-    __cilkrts_pop_frame(&sf);
-    if (0 != sf.flags)
-        __cilkrts_leave_frame(&sf);
-
+static void body(int64_t i, void *d) {
+    const data_t *data = d;
+    data->y[i] += data->x[i] * data->a;
 }
 
-// we cannot inline this function because of local variables
-static void __attribute__ ((noinline)) cilk_loop_helper(uint64_t low, uint64_t high, void *data, uint64_t grainsize) {
-    __cilkrts_stack_frame sf;
-    __cilkrts_enter_frame_fast(&sf);
-    __cilkrts_detach(&sf);
-    cilk_loop_recursive(low, high, data, grainsize);
-    __cilkrts_pop_frame(&sf);
-    __cilkrts_leave_frame(&sf);
-}
-
-void daxpy(double *y, double *x, double a, uint64_t n, uint64_t grainsize) {
-    data d = {.a=a, .x=x, .y=y};
-
-    cilk_loop_recursive(0, n, &d, grainsize);
+void daxpy(double *y, double *x, double a, int64_t n, unsigned int grainsize) {
+    data_t data = {.a=a, .x=x, .y=y};
+    cilk_for(n, &data, body, grainsize);
 }
 
 int usage(void) {
@@ -103,8 +51,8 @@ int main(int argc, char *argv[]) {
 
     double a = 3.0;
 
-    uint64_t N = 1000000;
-    uint64_t grainsize = 1;
+    int64_t N = 1000000;
+    unsigned int grainsize = 1;
     int help = 0, check = 0;
 
     get_options(argc, argv, specifiers, opt_types, &N, &check, &grainsize, &help);
@@ -125,7 +73,7 @@ int main(int argc, char *argv[]) {
     clockmark_t begin, end;
     uint64_t running_time[TIMING_COUNT];
 
-    for(int t = 0; t < TIMING_COUNT; t++) {
+    for (int t = 0; t < TIMING_COUNT; t++) {
         begin = ktiming_getmark();
         daxpy(y, x, a, N, grainsize);
         end = ktiming_getmark();
@@ -139,7 +87,7 @@ int main(int argc, char *argv[]) {
                     success = 0;
                 }
             }
-            if(success)
+            if (success)
                 printf("Successful\n");
         }
         memset(y, 0, N * sizeof(double));

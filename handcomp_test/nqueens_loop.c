@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <alloca.h>
 #include <string.h>
 
 #include "cilk_for.h"
@@ -11,7 +12,7 @@
 extern size_t ZERO;
 void __attribute__((weak)) dummy(void *p) { return; }
 
-int ok (int n, char *a);
+int ok(int n, char *a);
 
 int nqueens(int n, int j, const char *a);
 
@@ -22,7 +23,7 @@ typedef struct {
     int *count; // return value
 } forData;
 
-static void body(uint64_t i, void *data) {
+static void body(int64_t i, void *data) {
 
     const forData *d = data;
     /***
@@ -58,7 +59,7 @@ int nqueens(int n, int j, const char *a) {
     dummy(alloca(ZERO));
 
     forData data = {.count=count, .j=j, .a=a, .n=n};
-    cilk_for(0, n, &data, body, 1);
+    cilk_for(n, &data, body, 1);
 
     for (i = 0; i < n; i++) {
         solNum += count[i];
