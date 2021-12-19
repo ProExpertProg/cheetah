@@ -64,7 +64,7 @@ mandelbrot(double x0, double y0, double x1, double y1, int width, int height, in
 
     struct innerData outerD = {
             .x0=x0, .y0=y0, .xstep=xstep, .ystep=ystep,
-            .width=width, .max_depth=max_depth, .output=output, .j=grainsize
+            .width=width, .max_depth=max_depth, .output=output, .j=grainsize // reuse j
     };
 
     // Traverse the sample space in equally spaced steps with width * height samples
@@ -84,12 +84,12 @@ mandelbrot(double x0, double y0, double x1, double y1, int width, int height, in
 
 int usage(void) {
     fprintf(stderr,
-            "\nUsage: mandelbrot [-x width] [-x height] [-d depth] [-g grainsize] [-c] [-h]\n\n");
+            "\nUsage: mandelbrot [-x width] [-y height] [-n width=height/2] [-d depth] [-g grainsize] [-c] [-h]\n\n");
     return -1;
 }
 
-const char *specifiers[] = {"-x", "-y", "-d", "-c", "-g", "-h", 0};
-int opt_types[] = {LONGARG, LONGARG, INTARG, BOOLARG, LONGARG, BOOLARG, 0};
+const char *specifiers[] = {"-x", "-y", "-n", "-d", "-c", "-g", "-h", 0};
+int opt_types[] = {LONGARG, LONGARG, LONGARG, INTARG, BOOLARG, LONGARG, BOOLARG, 0};
 
 int main(int argc, char *argv[]) {
 
@@ -98,13 +98,19 @@ int main(int argc, char *argv[]) {
     double x1 = 1;
     double y1 = 0.875;
     int height = 1024, width = 2048;
+    int n = 0;
 
     int max_depth = 100;
     unsigned int grainsize = 1;
 
     int help = 0, check = 0;
 
-    get_options(argc, argv, specifiers, opt_types, &width, &height, &max_depth, &check, &grainsize, &help);
+    get_options(argc, argv, specifiers, opt_types, &width, &height, &n, &max_depth, &check, &grainsize, &help);
+
+    if (n != 0) {
+        height = n;
+        width = 2*n;
+    }
 
     if (help) {
         return usage();
