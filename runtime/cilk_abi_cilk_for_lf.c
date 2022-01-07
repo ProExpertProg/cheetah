@@ -10,10 +10,6 @@
 #include "readydeque.h"
 #include "local.h"
 
-extern size_t ZERO;
-
-void __attribute__((weak)) dummy(void *p) { return; }
-
 #if INLINE_POP_LF
 #define ATTR_POP_LF __always_inline
 #else
@@ -103,7 +99,9 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
 
 void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, int64_t count, unsigned int grain) {
 
-    dummy(alloca(ZERO));
+    printf("LOOP (grain=%u)", grain);
+
+    // dummy(alloca(ZERO));
     __cilkrts_loop_frame lf;
     int64_t end, rem;
 
@@ -187,7 +185,6 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
 }
 
 void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, int32_t count, unsigned int grain) {
-    dummy(alloca(ZERO));
     __cilkrts_loop_frame lf;
     uint32_t end, rem;
 

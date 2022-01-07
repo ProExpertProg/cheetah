@@ -7,10 +7,6 @@
 #include "cilk2c.h"
 #include "cilk2c_inlined.c"
 
-extern size_t ZERO;
-
-void __attribute__((weak)) dummy(void *p) { return; }
-
 void cilk_for_root64(int64_t low, int64_t high, void *data, __cilk_abi_f64_t body, unsigned int grainsize);
 
 // we cannot inline this function because of local variables
@@ -24,7 +20,6 @@ cilk_loop_helper64(int64_t low, int64_t high, void *data, __cilk_abi_f64_t body,
 }
 
 void cilk_for_root64(int64_t low, int64_t high, void *data, __cilk_abi_f64_t body, unsigned int grainsize) {
-    dummy(alloca(ZERO));
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
 
@@ -70,11 +65,8 @@ cilk_loop_helper32(int32_t low, int32_t high, void *data, __cilk_abi_f32_t body,
 
 void cilk_for_root32(int32_t low, int32_t high, void *data, __cilk_abi_f32_t body, unsigned grainsize) {
 
-    dummy(alloca(ZERO));
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
-
-//    printf("Cilk for DC\n");
 
     int32_t len = high - low;
     while (len > grainsize) {
