@@ -152,6 +152,21 @@ static void parse_rts_environment(global_state *g) {
     }
 }
 
+#ifdef CILK_DEFAULT_GRAINSIZE
+CHEETAH_INTERNAL uint64_t default_grainsize = CILK_DEFAULT_GRAINSIZE;
+
+static void set_default_grainsize() {
+    uint64_t env = env_get_int("CILK_GRAINSIZE");
+    if (env != 0) {
+        default_grainsize = env;
+    }
+}
+
+#else
+#define set_default_grainsize()
+#endif
+
+
 global_state *global_state_init(int argc, char *argv[]) {
     cilkrts_alert(BOOT, NULL,
                   "(global_state_init) Initializing global state");
@@ -161,6 +176,8 @@ global_state *global_state_init(int argc, char *argv[]) {
 #endif
 
     set_alert_debug_level(); // alert / debug used by global_state_allocate
+    set_default_grainsize(); // used to override the default grainsize
+
     global_state *g = global_state_allocate();
 
     g->options = (struct rts_options)DEFAULT_OPTIONS;
@@ -181,12 +198,12 @@ global_state *global_state_init(int argc, char *argv[]) {
     g->exiting_worker = 0;
 
     g->workers =
-        (__cilkrts_worker **)calloc(active_size, sizeof(__cilkrts_worker *));
-    g->deques = (ReadyDeque *)cilk_aligned_alloc(
-        __alignof__(ReadyDeque), active_size * sizeof(ReadyDeque));
-    g->threads = (pthread_t *)calloc(active_size, sizeof(pthread_t));
-    g->index_to_worker = (worker_id *)calloc(active_size, sizeof(worker_id));
-    g->worker_to_index = (worker_id *)calloc(active_size, sizeof(worker_id));
+            (__cilkrts_worker **) calloc(active_size, sizeof(__cilkrts_worker *));
+    g->deques = (ReadyDeque *) cilk_aligned_alloc(
+            __alignof__(ReadyDeque), active_size * sizeof(ReadyDeque));
+    g->threads = (pthread_t *) calloc(active_size, sizeof(pthread_t));
+    g->index_to_worker = (worker_id *) calloc(active_size, sizeof(worker_id));
+    g->worker_to_index = (worker_id *) calloc(active_size, sizeof(worker_id));
     cilk_internal_malloc_global_init(g); // initialize internal malloc first
     cilk_fiber_pool_global_init(g);
     cilk_global_sched_stats_init(&(g->stats));

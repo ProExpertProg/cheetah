@@ -195,6 +195,10 @@ else ()
   add_compile_definitions(SCHED_STATS=0)
 endif ()
 
+if (CILK_DEFAULT_GRAINSIZE)
+  add_compile_definitions(CILK_DEFAULT_GRAINSIZE=${CILK_DEFAULT_GRAINSIZE})
+endif ()
+
 if (ALERT_LVL)
   add_compile_definitions(ALERT_LVL=${ALERT_LVL})
 endif ()

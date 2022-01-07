@@ -537,6 +537,29 @@ __cilk_helper_epilogue_exn(__cilkrts_stack_frame *sf, char *exn) {
     __cilkrts_pause_frame(sf, exn);
 }
 
+/// If CILK_DEFAULT_GRAINSIZE is defined, then it is used as the grainsize for all loops.
+/// That also allows the user to override the fixed grainsize by using the environment variable CILK_GRAINSIZE
+/// Otherwise, we use the standard formula to calculate the grainsize at runtime.
+#ifdef CILK_DEFAULT_GRAINSIZE
+extern CHEETAH_INTERNAL uint64_t default_grainsize;
+
+/// Calculate the maximum number stored in a type
+#define umax(T) ((T)~(T)0)
+
+/// Returns the default grainsize for the loop
+#define __cilkrts_grainsize_fn_impl(NAME, INT_T)                               \
+    __attribute__((always_inline)) INT_T NAME(INT_T n) {                       \
+        if (umax(INT_T) < default_grainsize) return umax(INT_T);               \
+        return (INT_T) default_grainsize;                                      \
+    }
+
+#define __cilkrts_grainsize_fn(SZ)                                             \
+    __cilkrts_grainsize_fn_impl(__cilkrts_cilk_for_grainsize_##SZ, uint##SZ##_t)
+
+__cilkrts_grainsize_fn(8)
+
+#else
+
 /// Computes a grainsize for a cilk_for loop, using the following equation:
 ///
 ///     grainsize = min(2048, ceil(n / (8 * nworkers)))
@@ -560,5 +583,7 @@ __cilkrts_cilk_for_grainsize_8(uint8_t n) {
         return 1;
     return small_loop_grainsize;
 }
+
+#endif
 
 __cilkrts_grainsize_fn(16) __cilkrts_grainsize_fn(32) __cilkrts_grainsize_fn(64)
