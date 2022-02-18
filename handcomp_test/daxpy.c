@@ -28,12 +28,12 @@ typedef struct {
 } data_t;
 
 
-static void body(int64_t i, void *d) {
+static void body(uint64_t i, void *d) {
     const data_t *data = d;
     data->y[i] += data->x[i] * data->a;
 }
 
-void daxpy(double *y, double *x, double a, int64_t n, unsigned int grainsize) {
+void daxpy(double *y, double *x, double a, uint64_t n, unsigned int grainsize) {
     data_t data = {.a=a, .x=x, .y=y};
     cilk_for(n, &data, body, grainsize);
 }
@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
 
     double a = 3.0;
 
-    int64_t N = 1000000;
+    uint64_t N = 1000000;
     unsigned int grainsize = 1;
     int help = 0, check = 0;
 

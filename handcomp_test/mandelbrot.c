@@ -19,10 +19,10 @@ struct innerData {
     double x0, y0, xstep, ystep;
     int width, max_depth;
     unsigned char *output;
-    int64_t j; // also grainsize for loop
+    uint64_t j; // also grainsize for loop
 };
 
-void innerBody(int64_t i, void *data) {
+void innerBody(uint64_t i, void *data) {
     struct innerData *d = data;
 
     double z_real = d->x0 + i * d->xstep;
@@ -48,7 +48,7 @@ void innerBody(int64_t i, void *data) {
     d->output[d->j * d->width + i] = (unsigned char) ((depth / d->max_depth) * 255);
 }
 #ifndef SERIAL
-void outerBody(int64_t j, void *data) {
+void outerBody(uint64_t j, void *data) {
     struct innerData *d = data;
     struct innerData id = *d;
     id.j = j;

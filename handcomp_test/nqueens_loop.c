@@ -23,7 +23,7 @@ typedef struct {
     int *count; // return value
 } forData;
 
-static void body(int64_t i, void *data) {
+static void body(uint64_t i, void *data) {
 
     const forData *d = data;
     /***

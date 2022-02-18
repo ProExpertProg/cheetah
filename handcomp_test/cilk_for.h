@@ -8,21 +8,21 @@
 #include <stdint.h>
 #include <cilk2c.h>
 
-typedef void (*ForBody)(int64_t i, void *data);
+typedef void (*ForBody)(uint64_t i, void *data);
 
 typedef struct {
     void *innerData;
     ForBody body;
 } BodyAdapterData;
 
-void bodyAdapter(void *data, int64_t low, int64_t high) {
+void bodyAdapter(void *data, uint64_t low, uint64_t high) {
     const BodyAdapterData *d = data;
-    for (int64_t i = low; i < high; ++i) {
+    for (uint64_t i = low; i < high; ++i) {
         d->body(i, d->innerData);
     }
 }
 
-static inline void cilk_for(int64_t count, void *data, ForBody body, unsigned int grainsize) {
+static inline void cilk_for(uint64_t count, void *data, ForBody body, unsigned int grainsize) {
     BodyAdapterData d;
     d.innerData = data;
     d.body = body;

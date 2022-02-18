@@ -218,7 +218,7 @@ void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
 
 // this function should ONLY be called for the first iteration, before we push the loop frame on the deque
 __attribute__((always_inline))
-__cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame *lf, int64_t *index) {
+__cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame *lf, uint64_t *index) {
 
     __cilkrts_worker *w = __cilkrts_get_tls_worker();
     cilkrts_alert(CFRAME, w, "(__cilkrts_grab_first_iteration) frame %p\n", lf);
