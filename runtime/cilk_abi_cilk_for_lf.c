@@ -99,7 +99,7 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
 
 void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, int64_t count, unsigned int grain) {
 
-    printf("LOOP (grain=%u)", grain);
+    printf("LOOP (count=%ld, grain=%u)", count, grain);
 
     // dummy(alloca(ZERO));
     __cilkrts_loop_frame lf;
