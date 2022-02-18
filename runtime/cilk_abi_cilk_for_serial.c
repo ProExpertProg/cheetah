@@ -4,14 +4,12 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include "cilk2c.h"
+#include "cilk_abi_cilk_for.h"
 
-void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain) {
-    // Try just serial loop
-    // printf("Serial cilk_for\n");
+static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain, int inclusive) {
     body(data, 0, count);
 }
 
-void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain) {
+static void cilk_for_impl_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain, int inclusive) {
     body(data, 0, count);
 }

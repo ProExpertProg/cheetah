@@ -100,10 +100,12 @@ CHEETAH_INTERNAL uint64_t __cilkrts_cilk_for_grainsize_64(uint64_t n);
 typedef void (*__cilk_abi_f64_t)(void *data, uint64_t low, uint64_t high);
 
 void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain);
+void __cilkrts_cilk_for_inclusive_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain);
 
 typedef void (*__cilk_abi_f32_t)(void *data, uint32_t low, uint32_t high);
 
 void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain);
+void __cilkrts_cilk_for_inclusive_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain);
 
 
 // The return type of the functions obtaining iterations
