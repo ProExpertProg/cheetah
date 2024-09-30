@@ -16,7 +16,7 @@ set_source_files_properties(${CILK_FOR_FILE} PROPERTIES COMPILE_OPTIONS "-fno-om
 set(CHEETAH_SOURCES
   c_reducers.c
   cilk2c.c
-  cilk2c_inlined.c
+  # cilk2c_inlined.c # included in CILK_FOR_FILE
   cilkred_map.c
   debug.c
   fiber.c
