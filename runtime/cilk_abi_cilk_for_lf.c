@@ -172,7 +172,7 @@ static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, 
 
     // cilk_spawn cilk_for_loop_64(body, data, end, grain, inclusive);
     if(!__cilk_prepare_spawn(&sf)) {
-        cilk_for_loop_64(body, data, end, grain, inclusive);
+        cilk_for_loop_helper_64(body, data, end, grain, inclusive);
     }
 
     // remainder is the continuation
@@ -288,7 +288,7 @@ static void cilk_for_impl_32(__cilk_abi_f32_t body, void *data, uint32_t count, 
 
     // cilk_spawn cilk_for_loop_32(body, data, end, grain, inclusive);
     if(!__cilk_prepare_spawn(&sf)) {
-        cilk_for_loop_32(body, data, end, grain, inclusive);
+        cilk_for_loop_helper_32(body, data, end, grain, inclusive);
     }
 
     // remainder is the continuation
