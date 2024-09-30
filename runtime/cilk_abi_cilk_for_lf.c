@@ -106,24 +106,8 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
         __cilk_parent_epilogue(&inner_lf.sf);
 }
 
-static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain, int inclusive) {
+static void cilk_for_loop_64(__cilk_abi_f64_t body, void *data, uint64_t end, unsigned int grain, int inclusive) {
     __cilkrts_loop_frame lf;
-    uint64_t end, rem;
-
-    if (grain == 1) {
-        end = count;
-        rem = 0;
-    } else if (((grain - 1) & grain) == 0) { // power of 2 grainsize
-        end = count >> __builtin_ctz(grain); // trailing zeroes intrinsic
-        rem = count & (grain - 1);
-    } else {
-        end = count / grain, rem = count % grain;
-    }
-
-    // sanity check
-    CILK_ASSERT(__cilkrts_get_tls_worker(), end == count / grain);
-    CILK_ASSERT(__cilkrts_get_tls_worker(), rem == count % grain);
-
     __cilkrts_enter_loop_frame(&lf, 0, end);
 
     // cilk_for(int i = low; i < high; ++i) {
@@ -148,10 +132,55 @@ static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, 
 
     __cilkrts_leave_loop_frame(local_lf());
     CILK_ASSERT(lf.sf.worker, __cilkrts_get_tls_worker() == NULL || local_lf() == &lf);
+}
+
+__attribute__((noinline))
+static void cilk_for_loop_helper_64(__cilk_abi_f64_t body, void *data, uint64_t end, unsigned int grain, int inclusive) {
+    __cilkrts_stack_frame sf;
+    __cilkrts_enter_frame_helper(&sf);
+    __cilkrts_detach(&sf);
+    cilk_for_loop_64(body, data, end, grain, inclusive);
+    __cilk_helper_epilogue(&sf);
+}
+
+static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain, int inclusive) {
+    uint64_t end, rem;
+
+    if (grain == 1) {
+        end = count;
+        rem = 0;
+    } else if (((grain - 1) & grain) == 0) { // power of 2 grainsize
+        end = count >> __builtin_ctz(grain); // trailing zeroes intrinsic
+        rem = count & (grain - 1);
+    } else {
+        end = count / grain, rem = count % grain;
+    }
+
+    // sanity check
+    CILK_ASSERT(__cilkrts_get_tls_worker(), end == count / grain);
+    CILK_ASSERT(__cilkrts_get_tls_worker(), rem == count % grain);
 
     // if inclusive, remainder always contains at least an iteration
-    if (rem != 0 || inclusive)
-        body(data, count - rem, count);
+    if (rem == 0 && !inclusive) {
+        // no remainder to spawn
+        return cilk_for_loop_64(body, data, end, grain, inclusive);
+    }
+
+    // spawn the body, continue with the remainder
+    __cilkrts_stack_frame sf;
+    __cilkrts_enter_frame(&sf);
+
+    // cilk_spawn cilk_for_loop_64(body, data, end, grain, inclusive);
+    if(!__cilk_prepare_spawn(&sf)) {
+        cilk_for_loop_64(body, data, end, grain, inclusive);
+    }
+
+    // remainder is the continuation
+    body(data, count - rem, count);
+
+    // cilk_sync
+    __cilk_sync_nothrow(&sf);
+    __cilk_parent_epilogue(&sf);
 }
 
 /**
@@ -179,7 +208,7 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
     }
 
     if (status == SUCCESS_LAST_ITERATION) {
-        body(data, i, i + grainsize);
+        body(data, i, i + grainsize - inclusive);
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
@@ -192,24 +221,8 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
         __cilk_parent_epilogue(&inner_lf.sf);
 }
 
-static void cilk_for_impl_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain, int inclusive) {
+static void cilk_for_loop_32(__cilk_abi_f32_t body, void *data, uint32_t end, unsigned int grain, int inclusive) {
     __cilkrts_loop_frame lf;
-    uint32_t end, rem;
-
-    if (grain == 1) {
-        end = count;
-        rem = 0;
-    } else if (((grain - 1) & grain) == 0) { // power of 2 grainsize
-        end = count >> __builtin_ctz(grain); // trailing zeroes intrinsic
-        rem = count & (grain - 1);
-    } else {
-        end = count / grain, rem = count % grain;
-    }
-
-    // sanity check
-    CILK_ASSERT(__cilkrts_get_tls_worker(), end == count / grain);
-    CILK_ASSERT(__cilkrts_get_tls_worker(), rem == count % grain);
-
     __cilkrts_enter_loop_frame(&lf, 0, end);
 
     // cilk_for(int i = low; i < high; ++i) {
@@ -234,8 +247,54 @@ static void cilk_for_impl_32(__cilk_abi_f32_t body, void *data, uint32_t count, 
 
     __cilkrts_leave_loop_frame(local_lf());
     CILK_ASSERT(lf.sf.worker, __cilkrts_get_tls_worker() == NULL || local_lf() == &lf);
+}
+
+__attribute__((noinline))
+static void cilk_for_loop_helper_32(__cilk_abi_f32_t body, void *data, uint32_t end, unsigned int grain, int inclusive) {
+    __cilkrts_stack_frame sf;
+    __cilkrts_enter_frame_helper(&sf);
+    __cilkrts_detach(&sf);
+    cilk_for_loop_32(body, data, end, grain, inclusive);
+    __cilk_helper_epilogue(&sf);
+}
+
+
+static void cilk_for_impl_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain, int inclusive) {
+    uint32_t end, rem;
+
+    if (grain == 1) {
+        end = count;
+        rem = 0;
+    } else if (((grain - 1) & grain) == 0) { // power of 2 grainsize
+        end = count >> __builtin_ctz(grain); // trailing zeroes intrinsic
+        rem = count & (grain - 1);
+    } else {
+        end = count / grain, rem = count % grain;
+    }
+
+    // sanity check
+    CILK_ASSERT(__cilkrts_get_tls_worker(), end == count / grain);
+    CILK_ASSERT(__cilkrts_get_tls_worker(), rem == count % grain);
 
     // if inclusive, remainder always contains at least an iteration
-    if (rem != 0 || inclusive)
-        body(data, count - rem, count);
+    if (rem == 0 && !inclusive) {
+        // no remainder to spawn
+        return cilk_for_loop_32(body, data, end, grain, inclusive);
+    }
+
+    // spawn the body, continue with the remainder
+    __cilkrts_stack_frame sf;
+    __cilkrts_enter_frame(&sf);
+
+    // cilk_spawn cilk_for_loop_32(body, data, end, grain, inclusive);
+    if(!__cilk_prepare_spawn(&sf)) {
+        cilk_for_loop_32(body, data, end, grain, inclusive);
+    }
+
+    // remainder is the continuation
+    body(data, count - rem, count);
+
+    // cilk_sync
+    __cilk_sync_nothrow(&sf);
+    __cilk_parent_epilogue(&sf);
 }
