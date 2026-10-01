@@ -2,6 +2,8 @@
 #include <stdlib.h>
 
 #include "../runtime/cilk2c.h"
+// hand-compiled code needs the ABI functions inlined (cilkify cannot happen inside a non-inlined function)
+#include "../runtime/cilk2c_inlined.c"
 #include "ktiming.h"
 #include "getoptions.h"
 #include "cilk_for.h"
@@ -93,7 +95,7 @@ static void mm_dac(int *C, const int *A, const int *B, int n, int length, int n_
         for (int i = 0; i < length; i++)
             for (int j = 0; j < length; j++)
                 for (int k = 0; k < length; k++)
-                    C[i*n+j] += A[i*n+k] * B[k*n+j];
+                    C[i*n_C+j] += A[i*n+k] * B[k*n+j]; // C has stride n_C, not n (see D)
         return;
     }
 
