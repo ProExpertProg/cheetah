@@ -1,8 +1,10 @@
 #ifndef _READYDEQUE_H
 #define _READYDEQUE_H
 
+#include <stdatomic.h>
 #include "closure-type.h"
 #include "rts-config.h"
+#include "worker_coord.h"
 
 // Forward declaration
 typedef struct ReadyDeque ReadyDeque;
@@ -17,64 +19,76 @@ typedef struct ReadyDeque ReadyDeque;
 
 // Actual declaration
 struct ReadyDeque {
-    cilk_mutex mutex;
-    Closure *top, *bottom;
-    worker_id mutex_owner;
+    Closure *bottom;
+    Closure *top __attribute__((aligned(CILK_CACHE_LINE)));
+    _Atomic(worker_id) mutex_owner __attribute__((aligned(CILK_CACHE_LINE)));
 } __attribute__((aligned(CILK_CACHE_LINE)));
 
 /*********************************************************
  * Management of ReadyDeques
  *********************************************************/
 
-static inline
-void deque_assert_ownership(__cilkrts_worker *const w, worker_id pn) {
-    CILK_ASSERT(w, w->g->deques[pn].mutex_owner == w->self);
+static inline void deque_assert_ownership(ReadyDeque *deques,
+                                          worker_id self, worker_id pn) {
+    CILK_ASSERT(atomic_load_explicit(&deques[pn].mutex_owner,
+                                        memory_order_relaxed) == self);
+    (void)deques;
+    (void)self;
+    (void)pn;
 }
 
-static inline
-void deque_lock_self(__cilkrts_worker *const w) {
-    struct local_state *l = w->l;
-    worker_id id = w->self;
-    global_state *g = w->g;
-    l->lock_wait = true;
-    cilk_mutex_lock(&g->deques[id].mutex);
-    l->lock_wait = false;
-    g->deques[id].mutex_owner = id;
-}
-
-static inline
-void deque_unlock_self(__cilkrts_worker *const w) {
-    worker_id id = w->self;
-    global_state *g = w->g;
-    g->deques[id].mutex_owner = NO_WORKER;
-    cilk_mutex_unlock(&g->deques[id].mutex);
-}
-
-static inline
-int deque_trylock(__cilkrts_worker *const w, worker_id pn) {
-    global_state *g = w->g;
-    int ret = cilk_mutex_try(&g->deques[pn].mutex);
-    if (ret) {
-        g->deques[pn].mutex_owner = w->self;
+static inline void deque_lock_self(ReadyDeque *deques, worker_id self) {
+    worker_id id = self;
+    while (true) {
+        worker_id current_owner =
+            atomic_load_explicit(&deques[id].mutex_owner, memory_order_relaxed);
+        if ((current_owner == NO_WORKER) &&
+            atomic_compare_exchange_weak_explicit(
+                &deques[id].mutex_owner, &current_owner, id,
+                memory_order_acq_rel, memory_order_relaxed))
+            return;
+        busy_loop_pause();
     }
-    return ret;
 }
 
-static inline
-void deque_lock(__cilkrts_worker *const w, worker_id pn) {
-    global_state *g = w->g;
-    struct local_state *l = w->l;
-    l->lock_wait = true;
-    cilk_mutex_lock(&g->deques[pn].mutex);
-    l->lock_wait = false;
-    g->deques[pn].mutex_owner = w->self;
+static inline void deque_unlock_self(ReadyDeque *deques, worker_id self) {
+    worker_id id = self;
+    atomic_store_explicit(&deques[id].mutex_owner, NO_WORKER,
+                          memory_order_release);
 }
 
-static inline
-void deque_unlock(__cilkrts_worker *const w, worker_id pn) {
-    global_state *g = w->g;
-    g->deques[pn].mutex_owner = NO_WORKER;
-    cilk_mutex_unlock(&w->g->deques[pn].mutex);
+static inline int deque_trylock(ReadyDeque *deques, worker_id self,
+                                worker_id pn) {
+    worker_id current_owner =
+        atomic_load_explicit(&deques[pn].mutex_owner, memory_order_relaxed);
+    if ((current_owner == NO_WORKER) &&
+        atomic_compare_exchange_weak_explicit(
+            &deques[pn].mutex_owner, &current_owner, self, memory_order_acq_rel,
+            memory_order_relaxed))
+        return 1;
+
+    return 0;
+}
+
+static inline void deque_lock(ReadyDeque *deques, worker_id self,
+                              worker_id pn) {
+    while (true) {
+        worker_id current_owner =
+            atomic_load_explicit(&deques[pn].mutex_owner, memory_order_relaxed);
+        if ((current_owner == NO_WORKER) &&
+            atomic_compare_exchange_weak_explicit(
+                &deques[pn].mutex_owner, &current_owner, self,
+                memory_order_acq_rel, memory_order_relaxed))
+            return;
+        busy_loop_pause();
+    }
+}
+
+static inline void deque_unlock(ReadyDeque *deques, worker_id self,
+                                worker_id pn) {
+    (void)self; // TODO: Remove unused parameter?
+    atomic_store_explicit(&deques[pn].mutex_owner, NO_WORKER,
+                          memory_order_release);
 }
 
 /*
@@ -84,132 +98,127 @@ void deque_unlock(__cilkrts_worker *const w, worker_id pn) {
  * ANGE: the precondition of these functions is that the worker w -> self
  * must have locked worker pn's deque before entering the function
  */
-static inline
-Closure *deque_xtract_top(__cilkrts_worker *const w, worker_id pn) {
+static inline Closure *deque_xtract_top(ReadyDeque *deques, worker_id self,
+                                        worker_id pn) {
 
     Closure *cl;
 
     /* ANGE: make sure w has the lock on worker pn's deque */
-    deque_assert_ownership(w, pn);
+    deque_assert_ownership(deques, self, pn);
 
-    cl = w->g->deques[pn].top;
+    cl = deques[pn].top;
     if (cl) {
-        CILK_ASSERT(w, cl->owner_ready_deque == pn);
-        w->g->deques[pn].top = cl->next_ready;
+        CILK_ASSERT(cl->owner_ready_deque == pn);
+        deques[pn].top = cl->next_ready;
         /* ANGE: if there is only one entry in the deque ... */
-        if (cl == w->g->deques[pn].bottom) {
-            CILK_ASSERT(w, cl->next_ready == (Closure *)NULL);
-            w->g->deques[pn].bottom = (Closure *)NULL;
+        if (cl == deques[pn].bottom) {
+            CILK_ASSERT_NULL(cl->next_ready);
+            deques[pn].bottom = (Closure *)NULL;
         } else {
-            CILK_ASSERT(w, cl->next_ready);
+            CILK_ASSERT(cl->next_ready);
             (cl->next_ready)->prev_ready = (Closure *)NULL;
         }
         WHEN_CILK_DEBUG(cl->owner_ready_deque = NO_WORKER);
     } else {
-        CILK_ASSERT(w, w->g->deques[pn].bottom == (Closure *)NULL);
+        CILK_ASSERT_NULL(deques[pn].bottom);
     }
 
     return cl;
 }
 
-static inline
-Closure *deque_peek_top(__cilkrts_worker *const w, worker_id pn) {
+static inline Closure *deque_peek_top(ReadyDeque *deques,
+                                      __cilkrts_worker *const w, worker_id self,
+                                      worker_id pn) {
+
+    (void)w;  // unused if assertions disabled
 
     Closure *cl;
 
     /* ANGE: make sure w has the lock on worker pn's deque */
-    deque_assert_ownership(w, pn);
+    deque_assert_ownership(deques, self, pn);
 
     /* ANGE: return the top but does not unlink it from the rest */
-    cl = w->g->deques[pn].top;
+    cl = deques[pn].top;
     if (cl) {
         // If w is stealing, then it may peek the top of the deque of the worker
         // who is in the midst of exiting a Cilkified region.  In that case, cl
         // will be the root closure, and cl->owner_ready_deque is not
         // necessarily pn.  The steal will subsequently fail do_dekker_on.
-        CILK_ASSERT(w, cl->owner_ready_deque == pn ||
-                           (w->self != pn && cl == w->g->root_closure));
+        CILK_ASSERT(cl->owner_ready_deque == pn ||
+                           (self != pn && cl == w->g->root_closure));
     } else {
-        CILK_ASSERT(w, w->g->deques[pn].bottom == (Closure *)NULL);
+        CILK_ASSERT_NULL(deques[pn].bottom);
     }
 
     return cl;
 }
 
-static inline
-Closure *deque_xtract_bottom(__cilkrts_worker *const w, worker_id pn) {
+static inline Closure *deque_xtract_bottom(ReadyDeque *deques, worker_id self,
+                                           worker_id pn) {
 
     Closure *cl;
 
     /* ANGE: make sure w has the lock on worker pn's deque */
-    deque_assert_ownership(w, pn);
+    deque_assert_ownership(deques, self, pn);
 
-    cl = w->g->deques[pn].bottom;
+    cl = deques[pn].bottom;
     if (cl) {
-        CILK_ASSERT(w, cl->owner_ready_deque == pn);
-        w->g->deques[pn].bottom = cl->prev_ready;
-        if (cl == w->g->deques[pn].top) {
-            CILK_ASSERT(w, cl->prev_ready == (Closure *)NULL);
-            w->g->deques[pn].top = (Closure *)NULL;
+        CILK_ASSERT(cl->owner_ready_deque == pn);
+        deques[pn].bottom = cl->prev_ready;
+        if (cl == deques[pn].top) {
+            CILK_ASSERT_NULL(cl->prev_ready);
+            deques[pn].top = (Closure *)NULL;
         } else {
-            CILK_ASSERT(w, cl->prev_ready);
+            CILK_ASSERT(cl->prev_ready);
             (cl->prev_ready)->next_ready = (Closure *)NULL;
         }
 
         WHEN_CILK_DEBUG(cl->owner_ready_deque = NO_WORKER);
     } else {
-        CILK_ASSERT(w, w->g->deques[pn].top == (Closure *)NULL);
+        CILK_ASSERT_NULL(deques[pn].top);
     }
 
     return cl;
 }
 
-static inline
-Closure *deque_peek_bottom(__cilkrts_worker *const w, worker_id pn) {
+static inline Closure *
+deque_peek_bottom(ReadyDeque *deques, worker_id self, worker_id pn) {
 
     Closure *cl;
 
     /* ANGE: make sure w has the lock on worker pn's deque */
-    deque_assert_ownership(w, pn);
+    deque_assert_ownership(deques, self, pn);
 
-    cl = w->g->deques[pn].bottom;
+    cl = deques[pn].bottom;
     if (cl) {
-        CILK_ASSERT(w, cl->owner_ready_deque == pn);
+        CILK_ASSERT(cl->owner_ready_deque == pn);
     } else {
-        CILK_ASSERT(w, w->g->deques[pn].top == (Closure *)NULL);
+        CILK_ASSERT_NULL(deques[pn].top);
     }
 
     return cl;
-}
-
-static inline
-void deque_assert_is_bottom(__cilkrts_worker *const w, Closure *t) {
-
-    /* ANGE: still need to make sure the worker self has the lock */
-    deque_assert_ownership(w, w->self);
-    CILK_ASSERT(w, t == deque_peek_bottom(w, w->self));
 }
 
 /*
  * ANGE: this allow w -> self to append Closure cl onto worker pn's ready
  *       deque (i.e. make cl the new bottom).
  */
-static inline
-void deque_add_bottom(__cilkrts_worker *const w, Closure *cl, worker_id pn) {
+static inline void deque_add_bottom(ReadyDeque *deques, Closure *cl,
+                                    worker_id self, worker_id pn) {
 
-    deque_assert_ownership(w, pn);
-    CILK_ASSERT(w, cl->owner_ready_deque == NO_WORKER);
+    deque_assert_ownership(deques, self, pn);
+    CILK_ASSERT(cl->owner_ready_deque == NO_WORKER);
 
-    cl->prev_ready = w->g->deques[pn].bottom;
+    cl->prev_ready = deques[pn].bottom;
     cl->next_ready = (Closure *)NULL;
-    w->g->deques[pn].bottom = cl;
+    deques[pn].bottom = cl;
     WHEN_CILK_DEBUG(cl->owner_ready_deque = pn);
 
-    if (w->g->deques[pn].top) {
-        CILK_ASSERT(w, cl->prev_ready);
+    if (deques[pn].top) {
+        CILK_ASSERT(cl->prev_ready);
         (cl->prev_ready)->next_ready = cl;
     } else {
-        w->g->deques[pn].top = cl;
+        deques[pn].top = cl;
     }
 }
 

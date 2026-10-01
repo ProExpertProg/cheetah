@@ -19,6 +19,6 @@ split_loop_frame(__cilkrts_stack_frame *frame_to_steal, __cilkrts_worker *w, __c
 
 __cilkrts_loop_frame *clone_loop_frame(__cilkrts_loop_frame *loop_frame, __cilkrts_worker *w);
 
-void sync_loop_frame(__cilkrts_worker *w, Closure *t);
+void sync_loop_frame(__cilkrts_worker *w, Closure *t, bool had_fiber);
 
 #endif //CHEETAH_LOOP_FRAMES_H
