@@ -6,9 +6,7 @@
 
 typedef struct __cilkrts_worker __cilkrts_worker;
 
-#ifndef SCHED_STATS
 #define SCHED_STATS CILK_STATS
-#endif
 
 enum timing_type {
     INTERVAL_WORK = 0, // work time
@@ -29,6 +27,8 @@ struct sched_stats {
 
     uint64_t steals;
     uint64_t repos;
+    uint64_t reeng_rqsts;
+    uint64_t onesen_rqsts;
 };
 
 struct global_sched_stats {
@@ -40,6 +40,8 @@ struct global_sched_stats {
     uint64_t boss_end;
     uint64_t steals;
     uint64_t repos;
+    uint64_t reeng_rqsts;
+    uint64_t onesen_rqsts;
     double time[NUMBER_OF_STATS]; // Total time measured for all stats
     uint64_t count[NUMBER_OF_STATS];
 };

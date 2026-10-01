@@ -8,7 +8,6 @@ typedef uint32_t worker_id;
 typedef struct __cilkrts_worker __cilkrts_worker;
 typedef struct __cilkrts_stack_frame __cilkrts_stack_frame;
 typedef struct global_state global_state;
-typedef struct cilkred_map cilkred_map;
 
 typedef struct __cilkrts_loop_frame __cilkrts_loop_frame;
 typedef struct __cilkrts_inner_loop_frame __cilkrts_inner_loop_frame;
@@ -16,6 +15,6 @@ typedef struct __cilkrts_inner_loop_frame __cilkrts_inner_loop_frame;
 #define NO_WORKER 0xffffffffu /* type worker_id */
 
 // Constant representing invalid worker.
-#define INVALID (__cilkrts_worker *)0xbfbfbfbfbf
+#define INVALID_WORKER (__cilkrts_worker *)0xbfbfbfbfbf
 
 #endif /* _CILK_TYPES_H */

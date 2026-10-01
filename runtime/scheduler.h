@@ -3,6 +3,7 @@
 
 #include "cilk-internal.h"
 #include "closure.h"
+#include "efficiency.h"
 
 #define SYNC_READY 0
 #define SYNC_NOT_READY 1
@@ -11,18 +12,18 @@
 
 CHEETAH_INTERNAL void do_what_it_says_boss(__cilkrts_worker *w, Closure *t);
 
-CHEETAH_INTERNAL void __cilkrts_init_tls_variables();
 CHEETAH_INTERNAL void __cilkrts_set_tls_worker(__cilkrts_worker *w);
 
 CHEETAH_INTERNAL int Cilk_sync(__cilkrts_worker *const ws,
                                __cilkrts_stack_frame *frame);
 
-__attribute__((noreturn)) void Cilk_loop_frame_return();
+__attribute__((noreturn)) void Cilk_loop_frame_return(void);
 void Cilk_set_return(__cilkrts_worker *const ws);
-void Cilk_exception_handler(char *exn, unsigned int isLoop);
+// isLoop is nonzero if the frame being popped is an inner loop frame.
+void Cilk_exception_handler(__cilkrts_worker *w, char *exn, unsigned int isLoop);
 
 CHEETAH_INTERNAL_NORETURN void longjmp_to_runtime(__cilkrts_worker *w);
-CHEETAH_INTERNAL void worker_scheduler(__cilkrts_worker *ws);
+CHEETAH_INTERNAL void worker_scheduler(__cilkrts_worker *w, history_t *const history);
 CHEETAH_INTERNAL void *scheduler_thread_proc(void *arg);
 
 CHEETAH_INTERNAL void promote_own_deque(__cilkrts_worker *w);

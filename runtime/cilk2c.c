@@ -9,7 +9,11 @@
 #include "fiber.h"
 #include "global.h"
 #include "readydeque.h"
+#include "rts-config.h"
 #include "scheduler.h"
+
+CHEETAH_INTERNAL
+struct closure_exception exception_reducer = {.exn = NULL};
 
 extern void _Unwind_Resume(struct _Unwind_Exception *);
 extern _Unwind_Reason_Code _Unwind_RaiseException(struct _Unwind_Exception *);
@@ -17,25 +21,12 @@ extern _Unwind_Reason_Code _Unwind_RaiseException(struct _Unwind_Exception *);
 CHEETAH_INTERNAL struct cilkrts_callbacks cilkrts_callbacks = {
     0, 0, false, {NULL}, {NULL}};
 
-unsigned __cilkrts_get_nworkers(void) { return cilkg_nproc; }
-
-// Internal method to get the Cilk worker ID.  Intended for debugging purposes.
-//
-// TODO: Figure out how we want to support worker-local storage.
-unsigned __cilkrts_get_worker_number(void) {
-    __cilkrts_worker *w = __cilkrts_get_tls_worker();
-    if (w)
-        return w->self;
-    // Use the last exiting worker from default_cilkrts instead
-    return default_cilkrts->exiting_worker;
-}
-
 // Test if the Cilk runtime has been initialized.  This method is intended to
 // help initialization of libraries that depend on the OpenCilk runtime.
 int __cilkrts_is_initialized(void) { return NULL != default_cilkrts; }
 
 int __cilkrts_running_on_workers(void) {
-    return NULL != __cilkrts_get_tls_worker();
+    return !__cilkrts_need_to_cilkify;
 }
 
 // These callback-registration methods can run before the runtime system has
@@ -70,22 +61,17 @@ int __cilkrts_atexit(void (*callback)(void)) {
 // propagated. This is called from the frame that will handle whatever exception
 // was thrown.
 void __cilkrts_check_exception_raise(__cilkrts_stack_frame *sf) {
+    __cilkrts_worker *w = get_worker_from_stack(sf);
+    CILK_ASSERT_POINTER_EQUAL(w, __cilkrts_get_tls_worker());
 
-    __cilkrts_worker *w = sf->worker;
-    CILK_ASSERT(w, sf->worker == __cilkrts_get_tls_worker());
-
-    deque_lock_self(w);
-    Closure *t = deque_peek_bottom(w, w->self);
-    Closure_lock(w, t);
-    char *exn = t->user_exn.exn;
+    struct closure_exception *exn_r = get_exception_reducer(w);
+    char *exn = exn_r->exn;
 
     // zero exception storage, so we don't unintentionally try to
     // handle/propagate this exception again
-    clear_closure_exception(&(t->user_exn));
+    clear_exception_reducer(w, exn_r);
     sf->flags &= ~CILK_FRAME_EXCEPTION_PENDING;
 
-    Closure_unlock(w, t);
-    deque_unlock_self(w);
     if (exn != NULL) {
         _Unwind_RaiseException((struct _Unwind_Exception *)exn); // noreturn
     }
@@ -96,22 +82,17 @@ void __cilkrts_check_exception_raise(__cilkrts_stack_frame *sf) {
 // Checks if there is an exception that needs to be propagated, and if so,
 // resumes unwinding with that exception.
 void __cilkrts_check_exception_resume(__cilkrts_stack_frame *sf) {
+    __cilkrts_worker *w = get_worker_from_stack(sf);
+    CILK_ASSERT_POINTER_EQUAL(w, __cilkrts_get_tls_worker());
 
-    __cilkrts_worker *w = sf->worker;
-    CILK_ASSERT(w, sf->worker == __cilkrts_get_tls_worker());
-
-    deque_lock_self(w);
-    Closure *t = deque_peek_bottom(w, w->self);
-    Closure_lock(w, t);
-    char *exn = t->user_exn.exn;
+    struct closure_exception *exn_r = get_exception_reducer(w);
+    char *exn = exn_r->exn;
 
     // zero exception storage, so we don't unintentionally try to
     // handle/propagate this exception again
-    clear_closure_exception(&(t->user_exn));
+    clear_exception_reducer(w, exn_r);
     sf->flags &= ~CILK_FRAME_EXCEPTION_PENDING;
 
-    Closure_unlock(w, t);
-    deque_unlock_self(w);
     if (exn != NULL) {
         _Unwind_Resume((struct _Unwind_Exception *)exn); // noreturn
     }
@@ -124,59 +105,84 @@ void __cilkrts_check_exception_resume(__cilkrts_stack_frame *sf) {
 // points at the fiber and call-stack frame containing sf before any catch
 // handlers in that frame execute.
 void __cilkrts_cleanup_fiber(__cilkrts_stack_frame *sf, int32_t sel) {
+    (void)sel; // currently unused
 
-    __cilkrts_worker *w = sf->worker;
-    CILK_ASSERT(w, sf->worker == __cilkrts_get_tls_worker());
+    __cilkrts_worker *w = get_worker_from_stack(sf);
+    CILK_ASSERT_POINTER_EQUAL(w, __cilkrts_get_tls_worker());
 
-    deque_lock_self(w);
-    Closure *t = deque_peek_bottom(w, w->self);
+    CILK_ASSERT(__cilkrts_synced(sf));
 
-    // If t->parent_rsp is non-null, then the Cilk personality function executed
+    struct closure_exception *exn_r = get_exception_reducer_or_null(w);
+    struct cilk_fiber *throwing_fiber = NULL;
+    char *parent_rsp = NULL;
+    if (exn_r != NULL) {
+        throwing_fiber = exn_r->throwing_fiber;
+        parent_rsp = exn_r->parent_rsp;
+
+        exn_r->throwing_fiber = NULL;
+        clear_exception_reducer(w, exn_r);
+    }
+
+    // If parent_rsp is non-null, then the Cilk personality function executed
     // __cilkrts_sync(sf), which implies that sf is at the top of the deque.
     // Because we're executing a non-cleanup landingpad, execution is continuing
     // within this function frame, rather than unwinding further to a parent
     // frame, which would belong to a distinct closure.  Hence, if we reach this
-    // point, set the stack pointer in sf to t->parent_rsp if t->parent_rsp is
+    // point, set the stack pointer in sf to parent_rsp if parent_rsp is
     // non-null.
 
-    if (NULL == t->parent_rsp) {
-        deque_unlock_self(w);
+    if (NULL == parent_rsp) {
+        // If parent_rsp is null, we might have unwound past the point where the
+        // Cilk personality function performed a sync.  Because we're executing
+        // a non-cleanup landing pad, execution is continuing within this frame,
+        // and we can safely free any saved throwing fiber.
+        if (throwing_fiber) {
+            cilk_fiber_deallocate_to_pool(w, throwing_fiber);
+        }
         return;
     }
 
-    SP(sf) = (void *)t->parent_rsp;
-    t->parent_rsp = NULL;
+    SP(sf) = (void *)parent_rsp;
 
-    if (t->saved_throwing_fiber) {
-        cilk_fiber_deallocate_to_pool(w, t->saved_throwing_fiber);
-        t->saved_throwing_fiber = NULL;
+    // Since we're longjmping to another fiber, we don't need to save
+    // throwing_fiber anymore.
+    if (throwing_fiber) {
+        cilk_fiber_deallocate_to_pool(w, throwing_fiber);
     }
-
-    deque_unlock_self(w);
     __builtin_longjmp(sf->ctx, 1); // Does not return
     return;
 }
 
 void __cilkrts_sync(__cilkrts_stack_frame *sf) {
+    __cilkrts_worker *w = get_worker_from_stack(sf);
+    CILK_ASSERT_POINTER_EQUAL(w, __cilkrts_get_tls_worker());
 
-    __cilkrts_worker *w = sf->worker;
-
-    CILK_ASSERT(w, sf->worker == __cilkrts_get_tls_worker());
-    CILK_ASSERT(w, CHECK_CILK_FRAME_MAGIC(w->g, sf));
-    CILK_ASSERT(w, sf == w->current_stack_frame);
+    CILK_ASSERT(CHECK_CILK_FRAME_MAGIC(w->g, sf));
 
     if (Cilk_sync(w, sf) == SYNC_READY) {
         // The Cilk_sync restores the original rsp stored in sf->ctx
         // if this frame is ready to sync.
-        // the sync could reallocate the LoopFrame.
-        if (sf != w->current_stack_frame) {
-            // sf is not a valid location anymore
-            CILK_ASSERT(w, __cilkrts_is_loop(w->current_stack_frame));
-            CILK_ASSERT(w, w->current_stack_frame == &w->local_loop_frame->sf);
-            sf = w->current_stack_frame;
-        }
+        // The sync could swap out the LoopFrame (see sync_loop_frame), in which
+        // case sf has been freed and must not be dereferenced. setup_for_sync
+        // guarantees that the frame we continue with is the current frame of
+        // the (new) fiber.
+        sf = __cilkrts_current_fh->current_stack_frame;
         sysdep_longjmp_to_sf(sf);
     } else {
         longjmp_to_runtime(w);
     }
+}
+
+///////////////////////////////////////////////////////////////////////////
+/// Methods for handling extensions
+
+void __cilkrts_register_extension(void *extension) {
+    __cilkrts_use_extension = true;
+    __cilkrts_worker *w = __cilkrts_get_tls_worker();
+    w->extension = extension;
+}
+
+void *__cilkrts_get_extension(void) {
+    __cilkrts_worker *w = __cilkrts_get_tls_worker();
+    return w->extension;
 }

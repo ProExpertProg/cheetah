@@ -11,12 +11,13 @@ void cilk_for_root64(uint64_t low, uint64_t high, void *data, __cilk_abi_f64_t b
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
-cilk_loop_helper64(uint64_t low, uint64_t high, void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive) {
+cilk_loop_helper64(uint64_t low, uint64_t high, void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive,
+                   __cilkrts_stack_frame *parent) {
     __cilkrts_stack_frame sf;
-    __cilkrts_enter_frame_helper(&sf);
-    __cilkrts_detach(&sf);
+    __cilkrts_enter_frame_helper(&sf, parent, /* spawner */ false);
+    __cilkrts_detach(&sf, parent);
     cilk_for_root64(low, high, data, body, grainsize, inclusive);
-    __cilk_helper_epilogue(&sf);
+    __cilk_helper_epilogue(&sf, parent, /* spawner */ false);
 }
 
 void cilk_for_root64(uint64_t low, uint64_t high, void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive) {
@@ -29,7 +30,7 @@ void cilk_for_root64(uint64_t low, uint64_t high, void *data, __cilk_abi_f64_t b
 
         // cilk_spawn cilk_loop_helper()
         if (!__cilk_prepare_spawn(&sf)) {
-            cilk_loop_helper64(low, mid, data, body, grainsize, inclusive);
+            cilk_loop_helper64(low, mid, data, body, grainsize, inclusive, &sf);
         }
 
         low = mid + inclusive;
@@ -57,12 +58,13 @@ void cilk_for_root32(uint32_t low, uint32_t high, void *data, __cilk_abi_f32_t b
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
 cilk_loop_helper32(uint32_t low, uint32_t high, void *data, __cilk_abi_f32_t body, unsigned int grainsize,
-                   int inclusive) {
+                   int inclusive,
+                   __cilkrts_stack_frame *parent) {
     __cilkrts_stack_frame sf;
-    __cilkrts_enter_frame_helper(&sf);
-    __cilkrts_detach(&sf);
+    __cilkrts_enter_frame_helper(&sf, parent, /* spawner */ false);
+    __cilkrts_detach(&sf, parent);
     cilk_for_root32(low, high, data, body, grainsize, inclusive);
-    __cilk_helper_epilogue(&sf);
+    __cilk_helper_epilogue(&sf, parent, /* spawner */ false);
 }
 
 void cilk_for_root32(uint32_t low, uint32_t high, void *data, __cilk_abi_f32_t body, unsigned grainsize,
@@ -77,7 +79,7 @@ void cilk_for_root32(uint32_t low, uint32_t high, void *data, __cilk_abi_f32_t b
 
         // cilk_spawn cilk_loop_helper()
         if (!__cilk_prepare_spawn(&sf)) {
-            cilk_loop_helper32(low, mid, data, body, grainsize, inclusive);
+            cilk_loop_helper32(low, mid, data, body, grainsize, inclusive, &sf);
         }
 
         low = mid + inclusive;

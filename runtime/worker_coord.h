@@ -4,6 +4,8 @@
 // Routines for coordinating workers, specifically, putting workers to sleep and
 // waking workers when execution enters and leaves cilkified regions.
 
+#include <stdatomic.h>
+#include <stdint.h>
 #include <limits.h>
 
 #ifdef __linux__
@@ -34,8 +36,8 @@
 
 // Convenience wrapper for futex syscall.
 static inline long futex(_Atomic uint32_t *uaddr, int futex_op, uint32_t val,
-                  const struct timespec *timeout, uint32_t *uaddr2,
-                  uint32_t val3) {
+                         const struct timespec *timeout, uint32_t *uaddr2,
+                         uint32_t val3) {
     return syscall(SYS_futex, uaddr, futex_op, val, timeout, uaddr2, val3);
 }
 
@@ -66,149 +68,24 @@ static inline void fbroadcast(_Atomic uint32_t *futexp) {
     if (s == -1)
         errExit("futex-FUTEX_WAKE");
 }
-
-//=========================================================
-// Operations to control worker behavior using futexes and corresponding flags.
-//=========================================================
-
-// Called by a worker thread.  Causes the worker thread to wait on the given
-// flag-futex pair.
-static inline void worker_wait(volatile atomic_bool *flag,
-                        _Atomic uint32_t *flag_futex) {
-    while (!atomic_load_explicit(flag, memory_order_acquire)) {
-        fwait(flag_futex);
-    }
-}
-
-// Start all workers waiting on the given flag-futex pair.
-static inline void worker_start_broadcast(volatile atomic_bool *flag,
-                                   _Atomic uint32_t *flag_futex) {
-    atomic_store_explicit(flag, 1, memory_order_release);
-    fbroadcast(flag_futex);
-}
-
-// Reset the given flag-futex pair, so that workers will eventually resume
-// waiting on that flag-futex pair.
-static inline void worker_clear_start(volatile atomic_bool *flag,
-                               _Atomic uint32_t *flag_futex) {
-    atomic_store_explicit(flag, 0, memory_order_relaxed);
-    atomic_store_explicit(flag_futex, 0, memory_order_relaxed);
-}
-#else
-//=========================================================
-// Operations to control worker behavior using pthread condition variables and
-// corresponding flags.
-//=========================================================
-
-// Called by a worker thread.  Causes the worker thread to wait on the given
-// flag and associated mutex and condition variable.
-static inline void worker_wait(volatile atomic_bool *flag,
-                        pthread_mutex_t *flag_lock,
-                        pthread_cond_t *flag_cond_var) {
-    pthread_mutex_lock(flag_lock);
-    while (!atomic_load_explicit(flag, memory_order_acquire)) {
-        pthread_cond_wait(flag_cond_var, flag_lock);
-    }
-    pthread_mutex_unlock(flag_lock);
-}
-
-// Start all workers waiting on the given flag and associated mutex and
-// condition variable.
-static inline void worker_start_broadcast(volatile atomic_bool *flag,
-                                   pthread_mutex_t *flag_lock,
-                                   pthread_cond_t *flag_cond_var) {
-    pthread_mutex_lock(flag_lock);
-    atomic_store_explicit(flag, 1, memory_order_release);
-    pthread_cond_broadcast(flag_cond_var);
-    pthread_mutex_unlock(flag_lock);
-}
-
-// Reset given flag, so that workers will eventually resume waiting on that
-// flag.
-static inline void worker_clear_start(volatile atomic_bool *start) {
-    atomic_store_explicit(start, 0, memory_order_relaxed);
-}
 #endif
 
 //=========================================================
 // Common internal interface for managing execution of workers.
 //=========================================================
 
-// Called by a root-worker thread, that is, the worker w where w->self ==
-// g->exiting_worker.  Causes the root-worker thread to wait for a signal to
-// start work-stealing.
-static inline void root_worker_wait(global_state *g, const uint32_t id) {
-    _Atomic uint32_t *root_worker_p = &g->start_root_worker;
-/*     unsigned int fail = 0; */
-/*     while (fail++ < 2048) { */
-/*         if (id != atomic_load_explicit(root_worker_p, memory_order_acquire)) { */
-/*             return; */
-/*         } */
-/* #ifdef __SSE__ */
-/*         __builtin_ia32_pause(); */
-/* #endif */
-/* #ifdef __aarch64__ */
-/*         __builtin_arm_yield(); */
-/* #endif */
-/*     } */
-#if USE_FUTEX
-    while (id == atomic_load_explicit(root_worker_p, memory_order_acquire)) {
-        long s = futex(root_worker_p, FUTEX_WAIT_PRIVATE, id, NULL, NULL, 0);
-        if (__builtin_expect(s == -1 && errno != EAGAIN, false))
-            errExit("futex-FUTEX_WAIT");
-    }
-#else
-    pthread_mutex_t *root_worker_lock = &g->start_root_worker_lock;
-    pthread_mutex_lock(root_worker_lock);
-    while (id == atomic_load_explicit(root_worker_p, memory_order_acquire)) {
-        pthread_cond_wait(&g->start_root_worker_cond_var, root_worker_lock);
-    }
-    pthread_mutex_unlock(root_worker_lock);
+__attribute__((always_inline)) static inline void busy_loop_pause() {
+#ifdef __SSE__
+    __builtin_ia32_pause();
+#endif
+#ifdef __aarch64__
+    __builtin_arm_yield();
 #endif
 }
 
-// Signal the root-worker thread to start work-stealing (or terminate, if
-// g->terminate == 1).
-static inline void wake_root_worker(global_state *g, uint32_t val) {
-    _Atomic uint32_t *root_worker_p = &g->start_root_worker;
-#if USE_FUTEX
-    atomic_store_explicit(root_worker_p, val, memory_order_release);
-    long s = futex(root_worker_p, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
-    if (s == -1)
-        errExit("futex-FUTEX_WAKE");
-#else
-    pthread_mutex_t *root_worker_lock = &g->start_root_worker_lock;
-    pthread_mutex_lock(root_worker_lock);
-    atomic_store_explicit(root_worker_p, val, memory_order_release);
-    pthread_cond_signal(&g->start_root_worker_cond_var);
-    pthread_mutex_unlock(root_worker_lock);
-#endif
-}
-
-// Try to signal the root-worker thread to start work-stealing (or terminate, if
-// g->terminate == 1).  If the current root-worker value is *old_val, then wake
-// up the root worker.  Otherwise, just exit; in this latter case, another
-// worker must have woken up the root worker already.
-static inline void try_wake_root_worker(global_state *g, uint32_t *old_val,
-                                        uint32_t new_val) {
-    _Atomic uint32_t *root_worker_p = &g->start_root_worker;
-#if USE_FUTEX
-    if (atomic_compare_exchange_strong_explicit(root_worker_p, old_val, new_val,
-                                                memory_order_release,
-                                                memory_order_acquire)) {
-        long s = futex(root_worker_p, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
-        if (s == -1)
-            errExit("futex-FUTEX_WAKE");
-    }
-#else
-    pthread_mutex_t *root_worker_lock = &g->start_root_worker_lock;
-    pthread_mutex_lock(root_worker_lock);
-    if (*old_val == atomic_load_explicit(root_worker_p, memory_order_acquire)) {
-        atomic_store_explicit(root_worker_p, new_val, memory_order_release);
-        pthread_cond_signal(&g->start_root_worker_cond_var);
-    }
-    pthread_mutex_unlock(root_worker_lock);
-#endif
+__attribute__((always_inline)) static inline void busy_pause(void) {
+    for (int i = 0; i < BUSY_PAUSE; ++i)
+        busy_loop_pause();
 }
 
 // Routines to update global flags to prevent workers from re-entering the
@@ -244,16 +121,11 @@ static inline void signal_uncilkified(global_state *g) {
 // region.
 static inline void wait_while_cilkified(global_state *g) {
     unsigned int fail = 0;
-    while (fail++ < 2048) {
+    while (fail++ < BUSY_LOOP_SPIN) {
         if (!atomic_load_explicit(&g->cilkified, memory_order_acquire)) {
             return;
         }
-#ifdef __SSE__
-        __builtin_ia32_pause();
-#endif
-#ifdef __aarch64__
-        __builtin_arm_yield();
-#endif
+        busy_pause();
     }
 #if USE_FUTEX
     while (atomic_load_explicit(&g->cilkified, memory_order_acquire)) {
@@ -294,8 +166,13 @@ static inline void reset_disengaged_var(global_state *g) {
 
 // Request to reengage `count` thief threads.
 static inline void request_more_thieves(global_state *g, uint32_t count) {
-    CILK_ASSERT_G(count > 0);
+    CILK_ASSERT(count > 0);
 
+    // Don't allow this routine increment the futex beyond half the number of
+    // workers on the system.  This bounds how many successful steals can
+    // possibly keep thieves engaged unnecessarily in the future, when there may
+    // not be as much parallelism.
+    int32_t max_requests = (int32_t)(g->nworkers / 2);
 #if USE_FUTEX
     // This step synchronizes with concurrent calls to request_more_thieves and
     // concurrent calls to try_to_disengage_thief.
@@ -303,12 +180,7 @@ static inline void request_more_thieves(global_state *g, uint32_t count) {
         uint32_t disengaged_thieves_futex = atomic_load_explicit(
             &g->disengaged_thieves_futex, memory_order_acquire);
 
-        // Don't allow this routine increment the futex beyond half the number
-        // of workers on the system.  This bounds how many successful steals can
-        // possibly keep thieves engaged unnecessarily in the future, when there
-        // may not be as much parallelism.
-        int32_t max_to_wake =
-            (int32_t)(g->nworkers / 2) - disengaged_thieves_futex;
+        int32_t max_to_wake = max_requests - disengaged_thieves_futex;
         if (max_to_wake <= 0)
             return;
         uint64_t to_wake = max_to_wake < (int32_t)count ? max_to_wake : count;
@@ -316,7 +188,7 @@ static inline void request_more_thieves(global_state *g, uint32_t count) {
         if (atomic_compare_exchange_strong_explicit(
                 &g->disengaged_thieves_futex, &disengaged_thieves_futex,
                 disengaged_thieves_futex + to_wake, memory_order_release,
-                memory_order_acquire)) {
+                memory_order_relaxed)) {
             // We successfully updated the futex.  Wake the thief threads
             // waiting on this futex.
             long s = futex(&g->disengaged_thieves_futex, FUTEX_WAKE_PRIVATE,
@@ -331,11 +203,7 @@ static inline void request_more_thieves(global_state *g, uint32_t count) {
     uint32_t disengaged_thieves_futex = atomic_load_explicit(
         &g->disengaged_thieves_futex, memory_order_acquire);
 
-    // Don't allow this routine increment the futex beyond half the number
-    // of workers on the system.  This bounds how many successful steals can
-    // possibly keep thieves engaged unnecessarily in the future, when there
-    // may not be as much parallelism.
-    int32_t max_to_wake = (int32_t)(g->nworkers / 2) - disengaged_thieves_futex;
+    int32_t max_to_wake = max_requests - disengaged_thieves_futex;
     if (max_to_wake <= 0) {
         pthread_mutex_unlock(&g->disengaged_lock);
         return;
@@ -352,7 +220,7 @@ static inline void request_more_thieves(global_state *g, uint32_t count) {
 }
 
 #if USE_FUTEX
-static inline void thief_disengage_futex(_Atomic uint32_t *futexp) {
+static inline uint32_t thief_disengage_futex(_Atomic uint32_t *futexp) {
     // This step synchronizes with calls to request_more_thieves.
     while (true) {
         // Decrement the futex when woken up.  The loop and compare-exchange are
@@ -360,11 +228,12 @@ static inline void thief_disengage_futex(_Atomic uint32_t *futexp) {
         // were woken up and where there may be spurious wakeups.
         uint32_t val;
         while ((val = atomic_load_explicit(futexp, memory_order_relaxed)) > 0) {
-            if (atomic_compare_exchange_strong_explicit(futexp, &val, val - 1,
-                                                        memory_order_release,
-                                                        memory_order_acquire)) {
-                return;
+            if (atomic_compare_exchange_weak_explicit(futexp, &val, val - 1,
+                                                      memory_order_release,
+                                                      memory_order_relaxed)) {
+                return val;
             }
+            busy_loop_pause();
         }
 
         // Wait on the futex.
@@ -374,9 +243,9 @@ static inline void thief_disengage_futex(_Atomic uint32_t *futexp) {
     }
 }
 #else
-static inline void thief_disengage_cond_var(_Atomic uint32_t *count,
-                                            pthread_mutex_t *lock,
-                                            pthread_cond_t *cond_var) {
+static inline uint32_t thief_disengage_cond_var(_Atomic uint32_t *count,
+                                                pthread_mutex_t *lock,
+                                                pthread_cond_t *cond_var) {
     // This step synchronizes with calls to request_more_thieves.
     pthread_mutex_lock(lock);
     while (true) {
@@ -384,18 +253,19 @@ static inline void thief_disengage_cond_var(_Atomic uint32_t *count,
         if (val > 0) {
             atomic_store_explicit(count, val - 1, memory_order_release);
             pthread_mutex_unlock(lock);
-            return;
+            return val;
         }
         pthread_cond_wait(cond_var, lock);
     }
 }
 #endif
-static inline void thief_disengage(global_state *g) {
+static inline uint32_t thief_disengage(global_state *g) {
 #if USE_FUTEX
-    thief_disengage_futex(&g->disengaged_thieves_futex);
+    return thief_disengage_futex(&g->disengaged_thieves_futex);
 #else
-    thief_disengage_cond_var(&g->disengaged_thieves_futex, &g->disengaged_lock,
-                             &g->disengaged_cond_var);
+    return thief_disengage_cond_var(&g->disengaged_thieves_futex,
+                                    &g->disengaged_lock,
+                                    &g->disengaged_cond_var);
 #endif
 }
 
@@ -425,8 +295,42 @@ static inline void sleep_thieves(global_state *g) {
 
 // Called by a thief thread.  Causes the thief thread to wait for a signal to
 // start work-stealing.
-static inline void thief_wait(global_state *g) {
-    thief_disengage(g);
+static inline uint32_t thief_wait(global_state *g) {
+    return thief_disengage(g);
+}
+
+// Called by a thief thread.  Check if the thief should start waiting for the
+// start of a cilkified region.  If a new cilkified region has been started
+// already, update the global state to indicate that this worker is engaged in
+// work stealing.
+static inline bool thief_should_wait(global_state *g) {
+    _Atomic uint32_t *futexp = &g->disengaged_thieves_futex;
+    uint32_t val = atomic_load_explicit(futexp, memory_order_relaxed);
+#if USE_FUTEX
+    while (val > 0) {
+        if (atomic_compare_exchange_weak_explicit(futexp, &val, val - 1,
+                                                  memory_order_release,
+                                                  memory_order_relaxed))
+            return false;
+        busy_loop_pause();
+        val = atomic_load_explicit(futexp, memory_order_relaxed);
+    }
+    return true;
+#else
+    if (val == 0)
+        return true;
+
+    pthread_mutex_t *lock = &g->disengaged_lock;
+    pthread_mutex_lock(lock);
+    val = atomic_load_explicit(futexp, memory_order_relaxed);
+    if (val > 0) {
+        atomic_store_explicit(futexp, val - 1, memory_order_release);
+        pthread_mutex_unlock(lock);
+        return false;
+    }
+    pthread_mutex_unlock(lock);
+    return true;
+#endif
 }
 
 // Signal the thief threads to start work-stealing (or terminate, if

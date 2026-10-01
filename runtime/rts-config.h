@@ -3,7 +3,7 @@
 
 /* Functions defined in the library and visible outside the library. */
 #ifndef CHEETAH_API
-#if defined __BSD__ || defined __linux__ /* really, if using ELF */
+#ifdef __ELF__
 #define CHEETAH_API __attribute((visibility("protected")))
 #else
 #define CHEETAH_API
@@ -16,9 +16,14 @@
 #ifndef CHEETAH_INTERNAL_NORETURN
 #define CHEETAH_INTERNAL_NORETURN __attribute((noreturn, visibility("hidden")))
 #endif
-#define __CILKRTS_VERSION 0x0
 
-#define __CILKRTS_ABI_VERSION 3
+#ifndef __CILKRTS_VERSION
+#define __CILKRTS_VERSION 0x0
+#endif
+
+#ifndef __CILKRTS_ABI_VERSION
+#define __CILKRTS_ABI_VERSION 4
+#endif
 
 #ifndef CILK_DEBUG
 #define CILK_DEBUG 1
@@ -32,33 +37,65 @@
 #define CILK_STATS 0
 #endif
 
-#define BOSS_THIEF 1
-
-#define CILK_CACHE_LINE 64
-
-#define PROC_SPEED_IN_GHZ 2.2
-
-#if defined __linux__
-#define CILK_PAGE_SIZE 0 /* page size not available at compile time */
-#elif defined __APPLE__
-#define CILK_PAGE_SIZE 4096 /* Apple implies x86 or ARM */
-#else
-#include <machine/param.h>
+#ifndef CILK_CACHE_LINE
+// Use 128-bit cache lines to account for adjacent-cache-line prefetchers.
+#define CILK_CACHE_LINE 128
 #endif
 
-#define MIN_NUM_PAGES_PER_STACK 4
+#ifndef BUSY_PAUSE
+#define BUSY_PAUSE 1
+#endif
+
+#ifndef BUSY_LOOP_SPIN
+#define BUSY_LOOP_SPIN 4096 / BUSY_PAUSE
+#endif
+
+#ifndef ENABLE_THIEF_SLEEP
+#define ENABLE_THIEF_SLEEP 1
+#endif
+
+#ifndef ENABLE_EXTENSION
+#define ENABLE_EXTENSION 1
+#endif
+
+#ifndef ENABLE_WORKER_PINNING
+#define ENABLE_WORKER_PINNING 0
+#endif
+
+#ifndef MIN_NUM_PAGES_PER_STACK
+#define MIN_NUM_PAGES_PER_STACK 4 // must be greater than 1
+#endif
+
+_Static_assert(MIN_NUM_PAGES_PER_STACK >= 2, "Invalid Cheetah RTS config: MIN_NUM_PAGES_PER_STACK must be at least 2");
+
+#ifndef MAX_NUM_PAGES_PER_STACK
 #define MAX_NUM_PAGES_PER_STACK 2000
+#endif
 
-/* The largest known stack alignment requirement is for AVX-512
-   which may access memory in aligned 64 byte units. */
-#define MAX_STACK_ALIGN 64
+_Static_assert(MAX_NUM_PAGES_PER_STACK >= MIN_NUM_PAGES_PER_STACK, "Invalid Cheetah RTS config: MAX_NUM_PAGES_PER_STACK must be at least MIN_NUM_PAGES_PER_STACK");
 
+#ifndef DEFAULT_NPROC
 #define DEFAULT_NPROC 0 // 0 for # of cores available
-#define DEFAULT_DEQ_DEPTH 1024
-#define DEFAULT_STACK_SIZE 0x100000 // 1 MBytes
-#define DEFAULT_FIBER_POOL_CAP 3  // initial per-worker fiber pool capacity
-#define DEFAULT_REDUCER_LIMIT 1024
-#define DEFAULT_FORCE_REDUCE 0 // do not self steal to force reduce
+#endif
 
+#ifndef DEFAULT_DEQ_DEPTH
+#define DEFAULT_DEQ_DEPTH 1024
+#endif
+
+#ifndef LG_STACK_SIZE
+#define LG_STACK_SIZE 20 // 1 MBytes
+#endif
+
+#ifndef DEFAULT_STACK_SIZE
+#define DEFAULT_STACK_SIZE (1U << LG_STACK_SIZE) // 1 MBytes
+#endif
+
+#ifndef DEFAULT_FIBER_POOL_CAP
+#define DEFAULT_FIBER_POOL_CAP 8 // initial per-worker fiber pool capacity
+#endif
+
+#ifndef MAX_CALLBACKS
 #define MAX_CALLBACKS 32 // Maximum number of init or exit callbacks
+#endif
+
 #endif                   // _CONFIG_H

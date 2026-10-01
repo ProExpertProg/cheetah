@@ -4,6 +4,24 @@
 #include "cilk-internal.h"
 #include <stdlib.h>
 
+// Reducer structure for handling exceptions thrown in parallel.
+extern struct closure_exception exception_reducer;
+// Init method for exception reducer.
+CHEETAH_INTERNAL void init_exception_reducer(void *v);
+// Reduce method for exception reducer.
+CHEETAH_INTERNAL void reduce_exception_reducer(void *l, void *r);
+// Retrieve the exception stored in the local view of the exception reducer.
+CHEETAH_INTERNAL struct closure_exception *
+get_exception_reducer(__cilkrts_worker *w);
+// Retrieve the exception stored in the local view of the exception reducer, or
+// NULL if there is no local view..
+CHEETAH_INTERNAL struct closure_exception *
+get_exception_reducer_or_null(__cilkrts_worker *w);
+// Free resources used for a local view of the exception reducer.  This method
+// does not deallocate the exception
+CHEETAH_INTERNAL void clear_exception_reducer(__cilkrts_worker *w,
+                                              struct closure_exception *exn_r);
+
 // Returns 1 if the current exection is running on Cilk workers, 0 otherwise.
 CHEETAH_API int __cilkrts_running_on_workers(void);
 
@@ -17,7 +35,9 @@ CHEETAH_INTERNAL void __cilkrts_enter_frame(__cilkrts_stack_frame *sf);
 
 // Inserted at the entry of a spawn helper, i.e., a function that must have been
 // spawned.  Initializes the stack frame sf allocated for that function.
-CHEETAH_INTERNAL void __cilkrts_enter_frame_helper(__cilkrts_stack_frame *sf);
+CHEETAH_INTERNAL void
+__cilkrts_enter_frame_helper(__cilkrts_stack_frame *sf,
+                             __cilkrts_stack_frame *parent, bool spawner);
 
 // Prepare to perform a spawn.  This function may return once or twice,
 // returning 0 the first time and 1 the second time.  This function is intended
@@ -30,7 +50,8 @@ CHEETAH_INTERNAL int __cilk_prepare_spawn(__cilkrts_stack_frame *sf);
 
 // Called in the spawn helper immediately before the spawned computation.
 // Enables the parent function to be stollen.
-CHEETAH_INTERNAL void __cilkrts_detach(__cilkrts_stack_frame *sf);
+CHEETAH_INTERNAL void __cilkrts_detach(__cilkrts_stack_frame *sf,
+                                       __cilkrts_stack_frame *parent);
 
 // Check if the runtime is storing an exception we need to handle later, and
 // raises that exception if so.
@@ -63,14 +84,18 @@ CHEETAH_INTERNAL void __cilkrts_leave_frame(__cilkrts_stack_frame *sf);
 
 // Inserted on return from a spawn-helper function.  Performs Cilk's return
 // protocol for such functions.
-CHEETAH_INTERNAL void __cilkrts_leave_frame_helper(__cilkrts_stack_frame *sf);
+CHEETAH_INTERNAL void
+__cilkrts_leave_frame_helper(__cilkrts_stack_frame *sf,
+                             __cilkrts_stack_frame *parent, bool spawner);
 
 // Performs all necessary operations on return from a spawning function that is
 // not itself a spawn helper.
 CHEETAH_INTERNAL void __cilk_parent_epilogue(__cilkrts_stack_frame *sf);
 
 // Performs all necessary operations on return from a spawn-helper function.
-CHEETAH_INTERNAL void __cilk_helper_epilogue(__cilkrts_stack_frame *sf);
+CHEETAH_INTERNAL void __cilk_helper_epilogue(__cilkrts_stack_frame *sf,
+                                             __cilkrts_stack_frame *parent,
+                                             bool spawner);
 
 // Performs all necessary runtime updates when execution enters a landingpad in
 // a spawning function.
@@ -83,11 +108,15 @@ CHEETAH_API void __cilkrts_cleanup_fiber(__cilkrts_stack_frame *, int32_t sel);
 
 // Performs Cilk's return protocol on an exceptional return (i.e., a resume)
 // from a spawn-helper function.
-CHEETAH_INTERNAL void __cilkrts_pause_frame(__cilkrts_stack_frame *sf, char *exn);
+CHEETAH_INTERNAL void __cilkrts_pause_frame(__cilkrts_stack_frame *sf,
+                                            __cilkrts_stack_frame *parent,
+                                            char *exn, bool spawner);
 
 // Inserted on an exceptional return (i.e., a resume) from a spawn-helper
 // function.
-CHEETAH_INTERNAL void __cilk_pause_frame(__cilkrts_stack_frame *sf, char *exn);
+CHEETAH_INTERNAL void __cilk_pause_frame(__cilkrts_stack_frame *sf,
+                                         __cilkrts_stack_frame *parent,
+                                         char *exn, bool spawner);
 
 // Compute the grainsize for a cilk_for loop at runtime, based on the number n
 // of loop iterations.
@@ -99,14 +128,17 @@ CHEETAH_INTERNAL uint64_t __cilkrts_cilk_for_grainsize_64(uint64_t n);
 // ABI functions for cilk_for loops
 typedef void (*__cilk_abi_f64_t)(void *data, uint64_t low, uint64_t high);
 
-void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain);
-void __cilkrts_cilk_for_inclusive_64(__cilk_abi_f64_t body, void *data, uint64_t count, unsigned int grain);
+void __cilkrts_cilk_for_64(__cilk_abi_f64_t body, void *data, uint64_t count,
+                           unsigned int grain);
+void __cilkrts_cilk_for_inclusive_64(__cilk_abi_f64_t body, void *data,
+                                     uint64_t count, unsigned int grain);
 
 typedef void (*__cilk_abi_f32_t)(void *data, uint32_t low, uint32_t high);
 
-void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain);
-void __cilkrts_cilk_for_inclusive_32(__cilk_abi_f32_t body, void *data, uint32_t count, unsigned int grain);
-
+void __cilkrts_cilk_for_32(__cilk_abi_f32_t body, void *data, uint32_t count,
+                           unsigned int grain);
+void __cilkrts_cilk_for_inclusive_32(__cilk_abi_f32_t body, void *data,
+                                     uint32_t count, unsigned int grain);
 
 // The return type of the functions obtaining iterations
 typedef enum __cilkrts_iteration_return {
@@ -115,16 +147,19 @@ typedef enum __cilkrts_iteration_return {
     FAIL_ITERATION = 2u
 } __cilkrts_iteration_return;
 
-CHEETAH_API void __cilkrts_enter_loop_frame(__cilkrts_loop_frame * lf, __uint64_t start, __uint64_t end);
-CHEETAH_API void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf);
-CHEETAH_API __cilkrts_iteration_return __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame * lf, uint64_t *index);
-CHEETAH_API __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner_loop_frame *lf);
-CHEETAH_API void __cilkrts_leave_loop_frame(__cilkrts_loop_frame * sf);
+CHEETAH_API void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf,
+                                            uint64_t start, uint64_t end);
+CHEETAH_API void
+__cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf);
+CHEETAH_API __cilkrts_iteration_return
+__cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame *lf, uint64_t *index);
+CHEETAH_API __cilkrts_iteration_return
+__cilkrts_loop_frame_next(__cilkrts_inner_loop_frame *lf);
+CHEETAH_API void __cilkrts_leave_loop_frame(__cilkrts_loop_frame *sf);
 
-CHEETAH_API __cilkrts_loop_frame * local_lf();
+CHEETAH_API __cilkrts_loop_frame *local_lf(void);
 
 // Not marked as CHEETAH_API as it may be deprecated soon
 unsigned __cilkrts_get_nworkers(void);
-//CHEETAH_API int64_t* __cilkrts_get_pedigree(void);
-//void __cilkrts_pedigree_bump_rank(void);
+
 #endif
