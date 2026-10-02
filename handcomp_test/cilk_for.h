@@ -6,7 +6,7 @@
 #define CHEETAH_CILK_FOR_H
 
 #include <stdint.h>
-#include <cilk2c.h>
+#include "../runtime/cilk2c.h"
 
 typedef void (*ForBody)(uint64_t i, void *data);
 
