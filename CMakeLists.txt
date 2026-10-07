@@ -214,6 +214,21 @@ include(AddCheetah)
 # Setup Source Code
 #===============================================================================
 
+# Assertions are compiled in unless this is a Release build
+if (CMAKE_BUILD_TYPE STREQUAL Release)
+  add_compile_definitions(CILK_DEBUG=0)
+else()
+  add_compile_definitions(CILK_DEBUG=1)
+endif()
+
+if (CILK_DEFAULT_GRAINSIZE)
+  add_compile_definitions(CILK_DEFAULT_GRAINSIZE=${CILK_DEFAULT_GRAINSIZE})
+endif ()
+
+if (ALERT_LVL)
+  add_compile_definitions(ALERT_LVL=${ALERT_LVL})
+endif ()
+
 include_directories(runtime)
 
 # Add source code. This also contains all of the logic for deciding linker flags
