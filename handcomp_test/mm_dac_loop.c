@@ -6,7 +6,7 @@
 #include "../runtime/cilk2c_inlined.c"
 #include "ktiming.h"
 #include "getoptions.h"
-#include "cilk_for.h"
+#include "../runtime/cilk2c.h"
 
 #ifndef TIMING_COUNT
 #define TIMING_COUNT 1
@@ -70,16 +70,18 @@ typedef struct {
     int *dst, *src, length, n_C;
 } lData;
 
-static void body(uint64_t i, void *data) {
+static void body(void *data, uint64_t low, uint64_t high) {
     lData *d = data;
-    for (int j = 0; j < d->length; ++j) {
-        d->dst[i * d->n_C + j] += d->src[i * d->length + j]; // src is only len x len
+    for (uint64_t i = low; i < high; ++i) {
+        for (int j = 0; j < d->length; ++j) {
+            d->dst[i * d->n_C + j] += d->src[i * d->length + j]; // src is only len x len
+        }
     }
 }
 
 static void parallel_madd(int *dst, int *src, int length, int n_C) {
     lData d = {.dst=dst, .src=src, .length=length, .n_C=n_C};
-    cilk_for(length, &d, body, 1);
+    __cilkrts_cilk_for_64(body, &d, length, 1);
 }
 
 /**

@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cilk_for.h"
+#include "../runtime/cilk2c.h"
 #include "ktiming.h"
 
 extern size_t ZERO;
@@ -59,9 +59,8 @@ typedef struct {
     int *count; // return value
 } forData;
 
-static void body(uint64_t i, void *data) {
-
-    const forData *d = data;
+// One iteration per call, so the alloca below is released after every iteration
+static void iteration(const forData *d, uint64_t i) {
     /***
      * Strictly speaking, this (alloca after spawn) is frowned
      * up on, but in this case, this is ok, because b returned by
@@ -74,6 +73,12 @@ static void body(uint64_t i, void *data) {
 
     if (ok(d->j + 1, b)) {
         d->count[i] = nqueens(d->n, d->j + 1, b);
+    }
+}
+
+static void body(void *data, uint64_t low, uint64_t high) {
+    for (uint64_t i = low; i < high; ++i) {
+        iteration(data, i);
     }
 }
 
@@ -94,7 +99,7 @@ int nqueens(int n, int j, const char *a) {
     dummy(alloca(ZERO));
 
     forData data = {.count=count, .j=j, .a=a, .n=n};
-    cilk_for(n, &data, body, 1);
+    __cilkrts_cilk_for_64(body, &data, n, 1);
 
     for (i = 0; i < n; i++) {
         solNum += count[i];

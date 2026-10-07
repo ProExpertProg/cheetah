@@ -3,7 +3,7 @@
 
 #include "ktiming.h"
 #include "getoptions.h"
-#include "cilk_for.h"
+#include "../runtime/cilk2c.h"
 
 #ifndef TIMING_COUNT
 #define TIMING_COUNT 1
@@ -34,26 +34,29 @@ typedef struct {
     int64_t i;
 } innerData;
 
-void innerBody(int64_t j, void *data) {
+// Transposes columns [i + low, i + high) of row i
+void innerBody(void *data, uint64_t low, uint64_t high) {
     const innerData *d = data;
-    d->o->B[j * d->o->n + d->i] = d->o->A[d->i * d->o->n + j];
+    for (uint64_t j = d->i + low; j < d->i + high; ++j) {
+        d->o->B[j * d->o->n + d->i] = d->o->A[d->i * d->o->n + j];
+    }
 }
 
-void outerBody(uint64_t i, void *data) {
+void outerBody(void *data, uint64_t low, uint64_t high) {
     const outerData *d = data;
-    innerData id = {.o=d, .i=i};
+    for (uint64_t i = low; i < high; ++i) {
+        innerData id = {.o=d, .i=i};
 #ifdef MTRANS_PARALLELIZE_INNER
-    __(i, d->n, &id, innerBody, 1);
+        __cilkrts_cilk_for_64(innerBody, &id, d->n - i, 1);
 #else
-    for (int64_t j = i; j < d->n; ++j) {
-        innerBody(j, &id);
-    }
+        innerBody(&id, 0, d->n - i);
 #endif
+    }
 }
 
 static void m_transpose(int *B, const int *A, int n) {
     outerData d = {.n=n, .A=A, .B=B};
-    cilk_for(n, &d, outerBody, 1);
+    __cilkrts_cilk_for_64(outerBody, &d, n, 1);
 }
 
 static void rand_matrix(int *dest, int n) {

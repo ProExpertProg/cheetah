@@ -4,7 +4,7 @@
 #include "../runtime/cilk2c.h"
 #include "ktiming.h"
 #include "getoptions.h"
-#include "cilk_for.h"
+
 
 #ifndef TIMING_COUNT
 #define TIMING_COUNT 1
@@ -34,31 +34,33 @@ typedef struct {
     int64_t i, k;
 } innerData;
 
-void innerBody(int64_t j, void *data) {
+void innerBody(void *data, uint64_t low, uint64_t high) {
     const innerData *d = data;
     int64_t n = d->o->n;
     int64_t i = d->i, k = d->k;
 
-    d->o->C[i * n + j] += d->o->A[i * n + k] * d->o->B[k * n + j];
+    for (uint64_t j = low; j < high; ++j) {
+        d->o->C[i * n + j] += d->o->A[i * n + k] * d->o->B[k * n + j];
+    }
 }
 
-void outerBody(uint64_t i, void *data) {
+void outerBody(void *data, uint64_t low, uint64_t high) {
     const outerData *d = data;
-    for (int k = 0; k < d->n; k++) {
-        innerData id = {.o=d, .i=i, .k=k};
+    for (uint64_t i = low; i < high; ++i) {
+        for (int k = 0; k < d->n; k++) {
+            innerData id = {.o=d, .i=i, .k=k};
 #ifdef MMUL_PARALLELIZE_INNER
-        cilk_for(0, d->n, &id, innerBody, 1);
+            __cilkrts_cilk_for_64(innerBody, &id, d->n, 1);
 #else
-        for (int j = 0; j < d->n; ++j) {
-            innerBody(j, &id);
-        }
+            innerBody(&id, 0, d->n);
 #endif
+        }
     }
 }
 
 static void mmul(int *C, const int *A,const int *B, int n) {
     outerData d = {.n=n, .A=A, .B=B, .C=C};
-    cilk_for(n, &d, outerBody, 1);
+    __cilkrts_cilk_for_64(outerBody, &d, n, 1);
 }
 
 static void rand_matrix(int *dest, int n) {

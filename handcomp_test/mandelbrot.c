@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "cilk_for.h"
+#include "../runtime/cilk2c.h"
 #include "getoptions.h"
 #include "ktiming.h"
 
@@ -22,37 +22,41 @@ struct innerData {
     uint64_t j; // also grainsize for loop
 };
 
-void innerBody(uint64_t i, void *data) {
+void innerBody(void *data, uint64_t low, uint64_t high) {
     struct innerData *d = data;
 
-    double z_real = d->x0 + i * d->xstep;
-    double z_imaginary = d->y0 + d->j * d->ystep;
-    double c_real = z_real;
-    double c_imaginary = z_imaginary;
+    for (uint64_t i = low; i < high; ++i) {
+        double z_real = d->x0 + i * d->xstep;
+        double z_imaginary = d->y0 + d->j * d->ystep;
+        double c_real = z_real;
+        double c_imaginary = z_imaginary;
 
-    // depth should be an int, but the vectorizer will not vectorize, complaining about mixed data types
-    // switching it to double is worth the small cost in performance to let the vectorizer work
-    double depth = 0;
-    // Figures out how many recurrences are required before divergence, up to max_depth
-    while (depth < d->max_depth) {
-        if (z_real * z_real + z_imaginary * z_imaginary > 4.0) {
-            break; // Escape from a circle of radius 2
+        // depth should be an int, but the vectorizer will not vectorize, complaining about mixed data types
+        // switching it to double is worth the small cost in performance to let the vectorizer work
+        double depth = 0;
+        // Figures out how many recurrences are required before divergence, up to max_depth
+        while (depth < d->max_depth) {
+            if (z_real * z_real + z_imaginary * z_imaginary > 4.0) {
+                break; // Escape from a circle of radius 2
+            }
+            double temp_real = z_real * z_real - z_imaginary * z_imaginary;
+            double temp_imaginary = 2.0 * z_real * z_imaginary;
+            z_real = c_real + temp_real;
+            z_imaginary = c_imaginary + temp_imaginary;
+
+            ++depth;
         }
-        double temp_real = z_real * z_real - z_imaginary * z_imaginary;
-        double temp_imaginary = 2.0 * z_real * z_imaginary;
-        z_real = c_real + temp_real;
-        z_imaginary = c_imaginary + temp_imaginary;
-
-        ++depth;
+        d->output[d->j * d->width + i] = (unsigned char) ((depth / d->max_depth) * 255);
     }
-    d->output[d->j * d->width + i] = (unsigned char) ((depth / d->max_depth) * 255);
 }
 #ifndef SERIAL
-void outerBody(uint64_t j, void *data) {
+void outerBody(void *data, uint64_t low, uint64_t high) {
     struct innerData *d = data;
-    struct innerData id = *d;
-    id.j = j;
-    cilk_for(id.width, &id, innerBody, d->j);
+    for (uint64_t j = low; j < high; ++j) {
+        struct innerData id = *d;
+        id.j = j;
+        __cilkrts_cilk_for_64(innerBody, &id, id.width, d->j);
+    }
 }
 #endif
 
@@ -71,12 +75,10 @@ mandelbrot(double x0, double y0, double x1, double y1, int width, int height, in
 #ifdef SERIAL
     for (int j = 0; j < height; j++) {
         outerD.j = j;
-        for (int i = 0; i < width; i++) {
-            innerBody(i, &outerD);
-        }
+        innerBody(&outerD, 0, width);
     }
 #else
-    cilk_for(height, &outerD, outerBody, 1);
+    __cilkrts_cilk_for_64(outerBody, &outerD, height, 1);
 #endif
     return output;
 }

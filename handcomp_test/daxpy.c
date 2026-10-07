@@ -8,7 +8,7 @@
 
 #include "getoptions.h"
 #include "ktiming.h"
-#include "cilk_for.h"
+#include "../runtime/cilk2c.h"
 
 extern size_t ZERO;
 
@@ -28,14 +28,16 @@ typedef struct {
 } data_t;
 
 
-static void body(uint64_t i, void *d) {
+static void body(void *d, uint64_t low, uint64_t high) {
     const data_t *data = d;
-    data->y[i] += data->x[i] * data->a;
+    for (uint64_t i = low; i < high; ++i) {
+        data->y[i] += data->x[i] * data->a;
+    }
 }
 
 void daxpy(double *y, double *x, double a, uint64_t n, unsigned int grainsize) {
     data_t data = {.a=a, .x=x, .y=y};
-    cilk_for(n, &data, body, grainsize);
+    __cilkrts_cilk_for_64(body, &data, n, grainsize);
 }
 
 int usage(void) {
