@@ -81,6 +81,9 @@ target_link_libraries(mtrans ${LIBRARIES})
 
 add_executable(mmdac_loop mm_dac_loop.c ${UTIL})
 target_link_libraries(mmdac_loop ${LIBRARIES})
+# mm_dac_loop both inlines the ABI (it spawns) and calls cilk_for, so the inlined
+# functions are defined in the test and in the runtime's cilk_for object.
+target_link_options(mmdac_loop PRIVATE -Wl,--allow-multiple-definition)
 
 add_executable(mmul_loop mmul_loop.c ${UTIL})
 target_link_libraries(mmul_loop ${LIBRARIES})
