@@ -39,7 +39,7 @@ void innerBody(int64_t j, void *data) {
     d->o->B[j * d->o->n + d->i] = d->o->A[d->i * d->o->n + j];
 }
 
-void outerBody(int64_t i, void *data) {
+void outerBody(uint64_t i, void *data) {
     const outerData *d = data;
     innerData id = {.o=d, .i=i};
 #ifdef MTRANS_PARALLELIZE_INNER

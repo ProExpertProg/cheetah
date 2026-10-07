@@ -44,7 +44,6 @@ static void body(uint64_t i, void *data) {
 int nqueens(int n, int j, const char *a) {
 
     dummy(alloca(ZERO));
-    char *b;
     int i;
     int *count;
     int solNum = 0;

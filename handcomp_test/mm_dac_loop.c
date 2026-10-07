@@ -70,7 +70,7 @@ typedef struct {
     int *dst, *src, length, n_C;
 } lData;
 
-static void body(int64_t i, void *data) {
+static void body(uint64_t i, void *data) {
     lData *d = data;
     for (int j = 0; j < d->length; ++j) {
         d->dst[i * d->n_C + j] += d->src[i * d->length + j]; // src is only len x len

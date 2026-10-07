@@ -42,7 +42,7 @@ void innerBody(int64_t j, void *data) {
     d->o->C[i * n + j] += d->o->A[i * n + k] * d->o->B[k * n + j];
 }
 
-void outerBody(int64_t i, void *data) {
+void outerBody(uint64_t i, void *data) {
     const outerData *d = data;
     for (int k = 0; k < d->n; k++) {
         innerData id = {.o=d, .i=i, .k=k};
