@@ -21,6 +21,7 @@ cilk_loop_helper64(uint64_t low, uint64_t high, void *data, __cilk_abi_f64_t bod
 }
 
 void cilk_for_root64(uint64_t low, uint64_t high, void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive) {
+    FORCE_VAR_SIZED_FRAME();
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
 
@@ -70,6 +71,7 @@ cilk_loop_helper32(uint32_t low, uint32_t high, void *data, __cilk_abi_f32_t bod
 void cilk_for_root32(uint32_t low, uint32_t high, void *data, __cilk_abi_f32_t body, unsigned grainsize,
                      int inclusive) {
 
+    FORCE_VAR_SIZED_FRAME();
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
 

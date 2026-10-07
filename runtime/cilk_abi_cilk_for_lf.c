@@ -77,6 +77,7 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
 __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive) {
+    FORCE_VAR_SIZED_FRAME();
     uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
     __cilkrts_enter_inner_loop_frame(&inner_lf);
@@ -109,6 +110,7 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
 }
 
 static void cilk_for_loop_64(__cilk_abi_f64_t body, void *data, uint64_t end, unsigned int grain, int inclusive) {
+    FORCE_VAR_SIZED_FRAME();
     __cilkrts_loop_frame lf;
     __cilkrts_enter_loop_frame(&lf, 0, end);
 
@@ -172,6 +174,7 @@ static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, 
     }
 
     // spawn the body, continue with the remainder
+    FORCE_VAR_SIZED_FRAME();
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
 
@@ -195,6 +198,7 @@ static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
 __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int grainsize, int inclusive) {
+    FORCE_VAR_SIZED_FRAME();
     uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
     __cilkrts_enter_inner_loop_frame(&inner_lf);
@@ -227,6 +231,7 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
 }
 
 static void cilk_for_loop_32(__cilk_abi_f32_t body, void *data, uint32_t end, unsigned int grain, int inclusive) {
+    FORCE_VAR_SIZED_FRAME();
     __cilkrts_loop_frame lf;
     __cilkrts_enter_loop_frame(&lf, 0, end);
 
@@ -291,6 +296,7 @@ static void cilk_for_impl_32(__cilk_abi_f32_t body, void *data, uint32_t count, 
     }
 
     // spawn the body, continue with the remainder
+    FORCE_VAR_SIZED_FRAME();
     __cilkrts_stack_frame sf;
     __cilkrts_enter_frame(&sf);
 
