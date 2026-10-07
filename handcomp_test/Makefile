@@ -32,12 +32,6 @@ all: $(TESTS)
 $(SPAWN_TESTS) $(LOOP_TESTS): %: %.o $(UTIL)
 	$(CC) $(filter %.o,$^) -o $@ $(RTS_LIBS) $(EXTRA_LDFLAGS) -lrt -lpthread -lm
 
-# Target nqueens links nqueens.o + nqueens_spawn.o
-# Target nqueens_loop links nqueens_loop.o + nqueens.o
-# nqueens.c is the driver; the recursion lives in nqueens_spawn.c / nqueens_loop.c
-nqueens: nqueens_spawn.o
-nqueens_loop: nqueens.o
-
 # mm_dac_loop both inlines the ABI (it spawns) and calls cilk_for, so the
 # inlined functions are defined in the test and in the runtime's cilk_for object.
 mm_dac_loop: EXTRA_LDFLAGS = -Wl,--allow-multiple-definition

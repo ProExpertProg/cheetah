@@ -32,7 +32,7 @@ target_link_libraries(fib ${LIBRARIES})
 add_executable(mm_dac mm_dac.c ${UTIL})
 target_link_libraries(mm_dac ${LIBRARIES})
 
-add_executable(nqueens nqueens.c nqueens_spawn.c ${UTIL})
+add_executable(nqueens nqueens.c ${UTIL})
 target_link_libraries(nqueens ${LIBRARIES})
 
 add_executable(cilksort cilksort.c ${UTIL})
@@ -63,7 +63,7 @@ add_custom_target(handcomp_check
 add_executable(daxpy daxpy.c ${UTIL})
 target_link_libraries(daxpy ${LIBRARIES})
 
-add_executable(nqueens_loop nqueens.c nqueens_loop.c ${UTIL})
+add_executable(nqueens_loop nqueens_loop.c ${UTIL})
 target_link_libraries(nqueens_loop ${LIBRARIES})
 
 add_executable(mandelbrot mandelbrot.c ${UTIL})
