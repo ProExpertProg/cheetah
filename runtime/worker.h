@@ -32,11 +32,6 @@ struct __cilkrts_worker {
 
     // Cache line boundary on 64 bit systems with 64 byte cache lines
 
-    // Because a thief needs its own loop frame while operating on the same
-    // stack, the worker's current loop frame is saved here rather than in a
-    // local variable.
-    struct __cilkrts_loop_frame *local_loop_frame;
-
     // Optional state, only maintained if __cilkrts_use_extension == true.
     void *extension;
     void *ext_stack;

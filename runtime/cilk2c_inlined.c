@@ -139,10 +139,9 @@ __cilkrts_enter_frame_helper(__cilkrts_stack_frame *sf,
 __attribute__((always_inline))
 void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf, uint64_t start,
                                 uint64_t end) {
-    // Needs to come before we look up the worker, as we might cilkify here.
+    // May cilkify.
     __cilkrts_enter_frame(&lf->sf);
 
-    __cilkrts_worker *w = get_worker_from_stack(&lf->sf);
     cilkrts_alert(CFRAME, "(__cilkrts_enter_loop_frame) frame %p", (void *)lf);
 
     // could have flags set from enter_frame
@@ -152,8 +151,6 @@ void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf, uint64_t start,
     lf->start = start;
     lf->end = end;
 
-    // save so we can access it later when we're stackless
-    w->local_loop_frame = lf;
     CILK_ASSERT(__cilkrts_is_loop(&lf->sf));
 }
 
@@ -400,7 +397,7 @@ __cilkrts_leave_loop_frame(__cilkrts_loop_frame *lf) {
 
     CILK_ASSERT(CHECK_CILK_FRAME_MAGIC(w->g, &lf->sf));
     CILK_ASSERT(__cilkrts_is_loop(&lf->sf));
-    CILK_ASSERT(lf == w->local_loop_frame);
+    CILK_ASSERT(&lf->sf == lf->sf.fh->current_stack_frame);
 
     // We've already passed the cilk_sync
     CILK_ASSERT(__cilkrts_synced(&lf->sf));
@@ -450,14 +447,6 @@ __cilkrts_leave_loop_frame(__cilkrts_loop_frame *lf) {
             CILK_ASSERT(!__cilkrts_is_dynamic(&lf->sf));
         }
     }
-}
-
-// Must stay out of line: it is called right after the setjmp in cilk_for_loop_*,
-// where a thief may resume the loop on a different thread (with a cloned loop
-// frame). Inlined, the compiler can reuse the thread-local lookup done before
-// the setjmp.
-__attribute__((noinline)) __cilkrts_loop_frame *local_lf(void) {
-    return __cilkrts_get_tls_worker()->local_loop_frame;
 }
 
 __attribute__((always_inline))

@@ -154,5 +154,4 @@ void sync_loop_frame(__cilkrts_worker *w, Closure *t, bool had_fiber) {
     CILK_ASSERT(fh->current_stack_frame == NULL
                 || fh->current_stack_frame == old_frame);
     fh->current_stack_frame = t->frame;
-    w->local_loop_frame = (__cilkrts_loop_frame *) t->frame;
 }

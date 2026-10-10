@@ -64,6 +64,17 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
     return SUCCESS_ITERATION;
 }
 
+// The loop frame we are running in is the current stack frame. It changes when
+// a thief resumes the loop (it gets a clone), and the thief is a different
+// thread. This is called right after the setjmp in cilk_for_loop_*, so it must
+// stay out of line: inlined, the compiler can reuse the thread-local lookup of
+// __cilkrts_current_fh done before the setjmp.
+static __attribute__((noinline)) __cilkrts_loop_frame *current_loop_frame(void) {
+    __cilkrts_stack_frame *sf = __cilkrts_current_fh->current_stack_frame;
+    CILK_ASSERT(__cilkrts_is_loop(sf));
+    return (__cilkrts_loop_frame *)sf;
+}
+
 /* We handle both types of loops with the same function.
  * - If exclusive, we execute [0, count) in chunks of [i, i + grainsize), always incrementing i by grainsize.
  *   We execute a remainder chunk if any iterations are left.
@@ -99,9 +110,8 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
         body(data, i, i + grainsize - inclusive);
     }
 
-    // local loop frame might have been modified if we have a nested loop inside loop body
-    get_worker_from_stack(&inner_lf.sf)->local_loop_frame = parent;
-    CILK_ASSERT(local_lf() == parent);
+    // the loop frame is still the current frame, even after nested loops
+    CILK_ASSERT(parent->sf.fh->current_stack_frame == &parent->sf);
 
     // The inner loop frame is not a spawner, so if it was never detached there
     // is nothing to pop.
@@ -120,24 +130,24 @@ static void cilk_for_loop_64(__cilk_abi_f64_t body, void *data, uint64_t end, un
     __cilk_prepare_spawn(&lf.sf);
 
     __cilkrts_cilk_loop_helper64(data, body, grain, inclusive,
-                                   local_lf());
+                                   current_loop_frame());
 
-    CILK_ASSERT(local_lf()->start == local_lf()->end);
+    CILK_ASSERT(current_loop_frame()->start == current_loop_frame()->end);
 
-    // cannot use __cilkrts_sync because we cannot allow local_lf to be stored in a variable on the stack
+    // cannot use __cilkrts_sync because we cannot allow the loop frame to be stored in a variable on the stack
     // maybe there's a way of doing that? still need setjmp in this function though
-    if (!__cilkrts_synced(&local_lf()->sf)) {
-        if (__builtin_setjmp(local_lf()->sf.ctx) == 0) {
-            sysdep_save_fp_ctrl_state(&local_lf()->sf);
-            __cilkrts_sync(&local_lf()->sf);
+    if (!__cilkrts_synced(&current_loop_frame()->sf)) {
+        if (__builtin_setjmp(current_loop_frame()->sf.ctx) == 0) {
+            sysdep_save_fp_ctrl_state(&current_loop_frame()->sf);
+            __cilkrts_sync(&current_loop_frame()->sf);
         } else {
             sanitizer_finish_switch_fiber();
         }
     }
 
-    __cilkrts_leave_loop_frame(local_lf());
-    // after the last frame we have left the cilkified region
-    CILK_ASSERT(__cilkrts_need_to_cilkify || local_lf() == &lf);
+    // a loop frame that isn't split has to be the original one
+    CILK_ASSERT(__cilkrts_is_split(&current_loop_frame()->sf) || current_loop_frame() == &lf);
+    __cilkrts_leave_loop_frame(current_loop_frame());
 }
 
 __attribute__((noinline))
@@ -222,9 +232,8 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
         body(data, i, i + grainsize - inclusive);
     }
 
-    // local loop frame might have been modified if we have a nested loop inside loop body
-    get_worker_from_stack(&inner_lf.sf)->local_loop_frame = parent;
-    CILK_ASSERT(local_lf() == parent);
+    // the loop frame is still the current frame, even after nested loops
+    CILK_ASSERT(parent->sf.fh->current_stack_frame == &parent->sf);
 
     // The inner loop frame is not a spawner, so if it was never detached there
     // is nothing to pop.
@@ -243,24 +252,24 @@ static void cilk_for_loop_32(__cilk_abi_f32_t body, void *data, uint32_t end, un
     __cilk_prepare_spawn(&lf.sf);
 
     __cilkrts_cilk_loop_helper32(data, body, grain, inclusive,
-                                   local_lf());
+                                   current_loop_frame());
 
-    CILK_ASSERT(local_lf()->start == local_lf()->end);
+    CILK_ASSERT(current_loop_frame()->start == current_loop_frame()->end);
 
-    // cannot use __cilkrts_sync because we cannot allow local_lf to be stored in a variable on the stack
+    // cannot use __cilkrts_sync because we cannot allow the loop frame to be stored in a variable on the stack
     // maybe there's a way of doing that? still need setjmp in this function though
-    if (!__cilkrts_synced(&local_lf()->sf)) {
-        if (__builtin_setjmp(local_lf()->sf.ctx) == 0) {
-            sysdep_save_fp_ctrl_state(&local_lf()->sf);
-            __cilkrts_sync(&local_lf()->sf);
+    if (!__cilkrts_synced(&current_loop_frame()->sf)) {
+        if (__builtin_setjmp(current_loop_frame()->sf.ctx) == 0) {
+            sysdep_save_fp_ctrl_state(&current_loop_frame()->sf);
+            __cilkrts_sync(&current_loop_frame()->sf);
         } else {
             sanitizer_finish_switch_fiber();
         }
     }
 
-    __cilkrts_leave_loop_frame(local_lf());
-    // after the last frame we have left the cilkified region
-    CILK_ASSERT(__cilkrts_need_to_cilkify || local_lf() == &lf);
+    // a loop frame that isn't split has to be the original one
+    CILK_ASSERT(__cilkrts_is_split(&current_loop_frame()->sf) || current_loop_frame() == &lf);
+    __cilkrts_leave_loop_frame(current_loop_frame());
 }
 
 __attribute__((noinline))
