@@ -23,23 +23,22 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
 //                    lf);
     CILK_ASSERT(CHECK_CILK_FRAME_MAGIC(w->g, &lf->sf));
     CILK_ASSERT(w == __cilkrts_get_tls_worker());
-    CILK_ASSERT(&lf->sf == lf->sf.fh->current_stack_frame);
+    CILK_ASSERT(&lf->parentLF->sf == lf->sf.fh->current_stack_frame);
 
     CILK_ASSERT(lf->sf.flags & CILK_FRAME_DETACHED);
     CILK_ASSERT(__cilkrts_is_inner_loop(&lf->sf));
-    CILK_ASSERT(__cilkrts_is_loop(lf->sf.call_parent));
+    CILK_ASSERT(__cilkrts_is_loop(&lf->parentLF->sf));
 
     // THESE protocol
 
-    __cilkrts_loop_frame *pLoopFrame = (__cilkrts_loop_frame *) lf->sf.call_parent;
-    CILK_ASSERT(lf->parentLF == pLoopFrame);
+    __cilkrts_loop_frame *pLoopFrame = lf->parentLF;
 
     // safe to read tail as we're the only ones updating it
     // either:
     // - we're at the boundary of the stack (we stole something nested and are now walking back up,
     //   with access to the loop frame as but not on our deque (not ever)
     // - the loop frame is on our deque, whether we have access to it or not
-    CILK_ASSERT(w->tail == w->l->shadow_stack || *(w->tail - 1) == lf->sf.call_parent);
+    CILK_ASSERT(w->tail == w->l->shadow_stack || *(w->tail - 1) == &lf->parentLF->sf);
 
     // we just need to make sure that the load of end happens after store of start
     uint64_t start = __atomic_load_n(&pLoopFrame->start, __ATOMIC_RELAXED);
@@ -85,7 +84,7 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
     __cilkrts_iteration_return status = __cilkrts_grab_first_iteration(&inner_lf, &i);
     i *= grainsize;
     if (status == SUCCESS_ITERATION) {
-        __cilkrts_detach(&inner_lf.sf, inner_lf.sf.call_parent); // push the parent loop_frame to the deque
+        __cilkrts_detach(&inner_lf.sf, &inner_lf.parentLF->sf); // push the parent loop_frame to the deque
 
         do {
             CILK_ASSERT(i + grainsize == inner_lf.parentLF->start * grainsize);
@@ -100,13 +99,13 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
-    get_worker_from_stack(&inner_lf.sf)->local_loop_frame = (__cilkrts_loop_frame *) inner_lf.sf.call_parent;
+    get_worker_from_stack(&inner_lf.sf)->local_loop_frame = inner_lf.parentLF;
     CILK_ASSERT(local_lf() == inner_lf.parentLF);
 
+    // The inner loop frame is not a spawner, so if it was never detached there
+    // is nothing to pop.
     if (inner_lf.sf.flags & CILK_FRAME_DETACHED)
-        __cilk_helper_epilogue(&inner_lf.sf, inner_lf.sf.call_parent, /* spawner */ true);
-    else
-        __cilk_parent_epilogue(&inner_lf.sf);
+        __cilk_helper_epilogue(&inner_lf.sf, &inner_lf.parentLF->sf, /* spawner */ false);
 }
 
 static void cilk_for_loop_64(__cilk_abi_f64_t body, void *data, uint64_t end, unsigned int grain, int inclusive) {
@@ -206,7 +205,7 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
     __cilkrts_iteration_return status = __cilkrts_grab_first_iteration(&inner_lf, &i);
     i *= grainsize;
     if (status == SUCCESS_ITERATION) {
-        __cilkrts_detach(&inner_lf.sf, inner_lf.sf.call_parent); // push the parent loop_frame to the deque
+        __cilkrts_detach(&inner_lf.sf, &inner_lf.parentLF->sf); // push the parent loop_frame to the deque
 
         do {
             CILK_ASSERT(i + grainsize == inner_lf.parentLF->start * grainsize);
@@ -221,13 +220,13 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
-    get_worker_from_stack(&inner_lf.sf)->local_loop_frame = (__cilkrts_loop_frame *) inner_lf.sf.call_parent;
+    get_worker_from_stack(&inner_lf.sf)->local_loop_frame = inner_lf.parentLF;
     CILK_ASSERT(local_lf() == inner_lf.parentLF);
 
+    // The inner loop frame is not a spawner, so if it was never detached there
+    // is nothing to pop.
     if (inner_lf.sf.flags & CILK_FRAME_DETACHED)
-        __cilk_helper_epilogue(&inner_lf.sf, inner_lf.sf.call_parent, /* spawner */ true);
-    else
-        __cilk_parent_epilogue(&inner_lf.sf);
+        __cilk_helper_epilogue(&inner_lf.sf, &inner_lf.parentLF->sf, /* spawner */ false);
 }
 
 static void cilk_for_loop_32(__cilk_abi_f32_t body, void *data, uint32_t end, unsigned int grain, int inclusive) {

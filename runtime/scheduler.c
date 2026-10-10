@@ -702,8 +702,8 @@ void Cilk_exception_handler(__cilkrts_worker *w, char *exn,
             // was completely taken, but we can't discard it as it will be
             // needed for synchronization
 
-            // we've already popped the inner loop frame, so the current frame
-            // is its parent
+            // the inner loop frame is not a spawner, so it was never the
+            // current frame: the current frame is its parent loop frame
             struct cilk_fiber *fh = __cilkrts_current_fh;
             __cilkrts_stack_frame *cur = fh->current_stack_frame;
             CILK_ASSERT(__cilkrts_is_loop(cur));

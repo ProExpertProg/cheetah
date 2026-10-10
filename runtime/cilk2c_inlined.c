@@ -157,8 +157,11 @@ void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf, uint64_t start,
     CILK_ASSERT(__cilkrts_is_loop(&lf->sf));
 }
 
-// The inner loop frame is a spawn helper (spawner = true) whose parent is the
-// current loop frame. It is the frame that actually executes the iterations.
+// The inner loop frame is a spawn helper whose parent is the current loop
+// frame. It is the frame that actually executes the iterations. It is not a
+// spawner: it never becomes the current stack frame, so frames called from the
+// loop body have the loop frame as their call_parent and the inner loop frame
+// is never promoted. The loop frame is found through lf->parentLF.
 __attribute__((always_inline))
 void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
     __cilkrts_stack_frame *parent = __cilkrts_current_fh->current_stack_frame;
@@ -167,11 +170,10 @@ void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf) {
                   (void *)lf);
     CILK_ASSERT(__cilkrts_is_loop(parent));
 
-    __cilkrts_enter_frame_helper(&lf->sf, parent, /* spawner */ true);
+    __cilkrts_enter_frame_helper(&lf->sf, parent, /* spawner */ false);
     lf->sf.flags |= CILK_FRAME_INNER_LOOP;
-    WHEN_CILK_DEBUG(lf->parentLF = (__cilkrts_loop_frame *)parent);
+    lf->parentLF = (__cilkrts_loop_frame *)parent;
 
-    CILK_ASSERT(lf->sf.call_parent == parent);
     CILK_ASSERT(!__cilkrts_is_loop(&lf->sf));
     CILK_ASSERT(__cilkrts_is_inner_loop(&lf->sf));
     CILK_ASSERT((lf->sf.flags & CILK_FRAME_DETACHED) == 0);
@@ -186,17 +188,16 @@ __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame *lf,
     cilkrts_alert(CFRAME, "(__cilkrts_grab_first_iteration) frame %p",
                   (void *)lf);
     CILK_ASSERT(__cilkrts_is_inner_loop(&lf->sf));
-    CILK_ASSERT(__cilkrts_is_loop(lf->sf.call_parent));
+    CILK_ASSERT(__cilkrts_is_loop(&lf->parentLF->sf));
 
-    // We must currently be in the inner loop frame
-    CILK_ASSERT(&lf->sf == lf->sf.fh->current_stack_frame);
+    // The loop frame is still the current frame
+    CILK_ASSERT(&lf->parentLF->sf == lf->sf.fh->current_stack_frame);
 
     // this frame shouldn't be detached yet
     CILK_ASSERT((lf->sf.flags & CILK_FRAME_DETACHED) == 0);
 
     // get the first iteration from loopframe
-    __cilkrts_loop_frame *pLoopFrame = (__cilkrts_loop_frame *)lf->sf.call_parent;
-    CILK_ASSERT(pLoopFrame == lf->parentLF);
+    __cilkrts_loop_frame *pLoopFrame = lf->parentLF;
 
     *index = pLoopFrame->start++;
     cilkrts_alert(CFRAME,

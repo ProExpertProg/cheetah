@@ -128,9 +128,10 @@ struct __cilkrts_inner_loop_frame {
     // __cilkrts_stack_frame
     __cilkrts_stack_frame sf;
 
-    // Because we keep entering and leaving the inner loop frame,
-    //  we store a reference to the parent here.
-    WHEN_CILK_DEBUG(struct __cilkrts_loop_frame *parentLF);
+    // The inner loop frame is not a spawner (it is never made the current
+    // stack frame and is not part of the call_parent chain), so we keep a
+    // reference to the loop frame whose iterations it runs here.
+    struct __cilkrts_loop_frame *parentLF;
     // perhaps the multi-D etc
 };
 
