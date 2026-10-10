@@ -150,11 +150,14 @@ typedef enum __cilkrts_iteration_return {
 CHEETAH_API void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf,
                                             uint64_t start, uint64_t end);
 CHEETAH_API void
-__cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf);
+__cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf,
+                                 __cilkrts_loop_frame *parent);
 CHEETAH_API __cilkrts_iteration_return
-__cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame *lf, uint64_t *index);
+__cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame *lf,
+                               __cilkrts_loop_frame *parent, uint64_t *index);
 CHEETAH_API __cilkrts_iteration_return
-__cilkrts_loop_frame_next(__cilkrts_inner_loop_frame *lf);
+__cilkrts_loop_frame_next(__cilkrts_inner_loop_frame *lf,
+                          __cilkrts_loop_frame *parent);
 CHEETAH_API void __cilkrts_leave_loop_frame(__cilkrts_loop_frame *sf);
 
 CHEETAH_API __cilkrts_loop_frame *local_lf(void);

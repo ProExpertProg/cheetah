@@ -16,29 +16,29 @@
 #define ATTR_POP_LF __attribute_noinline__
 #endif
 
-ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner_loop_frame *lf) {
+ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner_loop_frame *lf, __cilkrts_loop_frame *pLoopFrame) {
     __cilkrts_worker *w = get_worker_from_stack(&lf->sf);
 //    cilkrts_alert(CFRAME,
 //                    "(__cilkrts_loop_frame_next) attempting to obtain another iteration for frame %p",
 //                    lf);
     CILK_ASSERT(CHECK_CILK_FRAME_MAGIC(w->g, &lf->sf));
     CILK_ASSERT(w == __cilkrts_get_tls_worker());
-    CILK_ASSERT(&lf->parentLF->sf == lf->sf.fh->current_stack_frame);
+    CILK_ASSERT(&pLoopFrame->sf == lf->sf.fh->current_stack_frame);
 
     CILK_ASSERT(lf->sf.flags & CILK_FRAME_DETACHED);
     CILK_ASSERT(__cilkrts_is_inner_loop(&lf->sf));
-    CILK_ASSERT(__cilkrts_is_loop(&lf->parentLF->sf));
+    CILK_ASSERT(__cilkrts_is_loop(&pLoopFrame->sf));
 
     // THESE protocol
 
-    __cilkrts_loop_frame *pLoopFrame = lf->parentLF;
+    CILK_ASSERT(lf->parentLF == pLoopFrame);
 
     // safe to read tail as we're the only ones updating it
     // either:
     // - we're at the boundary of the stack (we stole something nested and are now walking back up,
     //   with access to the loop frame as but not on our deque (not ever)
     // - the loop frame is on our deque, whether we have access to it or not
-    CILK_ASSERT(w->tail == w->l->shadow_stack || *(w->tail - 1) == &lf->parentLF->sf);
+    CILK_ASSERT(w->tail == w->l->shadow_stack || *(w->tail - 1) == &pLoopFrame->sf);
 
     // we just need to make sure that the load of end happens after store of start
     uint64_t start = __atomic_load_n(&pLoopFrame->start, __ATOMIC_RELAXED);
@@ -64,6 +64,14 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
     return SUCCESS_ITERATION;
 }
 
+// The loop frame we are running in changes when a thief resumes the loop (it
+// gets a clone), and the thief is a different thread. Calls to the helpers
+// below follow the setjmp in cilk_for_loop_*, so we must not let the compiler
+// reuse the thread-local lookup from before the setjmp: keep this out of line.
+static __attribute__((noinline)) __cilkrts_loop_frame *current_loop_frame(void) {
+    return (__cilkrts_loop_frame *)__cilkrts_current_fh->current_stack_frame;
+}
+
 /* We handle both types of loops with the same function.
  * - If exclusive, we execute [0, count) in chunks of [i, i + grainsize), always incrementing i by grainsize.
  *   We execute a remainder chunk if any iterations are left.
@@ -75,21 +83,22 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
-__cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive) {
+__cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive,
+                          __cilkrts_loop_frame *parent) {
     FORCE_VAR_SIZED_FRAME();
     uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
-    __cilkrts_enter_inner_loop_frame(&inner_lf);
+    __cilkrts_enter_inner_loop_frame(&inner_lf, parent);
 
-    __cilkrts_iteration_return status = __cilkrts_grab_first_iteration(&inner_lf, &i);
+    __cilkrts_iteration_return status = __cilkrts_grab_first_iteration(&inner_lf, parent, &i);
     i *= grainsize;
     if (status == SUCCESS_ITERATION) {
-        __cilkrts_detach(&inner_lf.sf, &inner_lf.parentLF->sf); // push the parent loop_frame to the deque
+        __cilkrts_detach(&inner_lf.sf, &parent->sf); // push the parent loop_frame to the deque
 
         do {
-            CILK_ASSERT(i + grainsize == inner_lf.parentLF->start * grainsize);
+            CILK_ASSERT(i + grainsize == parent->start * grainsize);
             body(data, i, i + grainsize - inclusive);
-            status = __cilkrts_loop_frame_next(&inner_lf);
+            status = __cilkrts_loop_frame_next(&inner_lf, parent);
             i += grainsize;
         } while (status == SUCCESS_ITERATION);
     }
@@ -99,13 +108,13 @@ __cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int gra
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
-    get_worker_from_stack(&inner_lf.sf)->local_loop_frame = inner_lf.parentLF;
-    CILK_ASSERT(local_lf() == inner_lf.parentLF);
+    get_worker_from_stack(&inner_lf.sf)->local_loop_frame = parent;
+    CILK_ASSERT(local_lf() == parent);
 
     // The inner loop frame is not a spawner, so if it was never detached there
     // is nothing to pop.
     if (inner_lf.sf.flags & CILK_FRAME_DETACHED)
-        __cilk_helper_epilogue(&inner_lf.sf, &inner_lf.parentLF->sf, /* spawner */ false);
+        __cilk_helper_epilogue(&inner_lf.sf, &parent->sf, /* spawner */ false);
 }
 
 static void cilk_for_loop_64(__cilk_abi_f64_t body, void *data, uint64_t end, unsigned int grain, int inclusive) {
@@ -118,7 +127,8 @@ static void cilk_for_loop_64(__cilk_abi_f64_t body, void *data, uint64_t end, un
     // Contains the setjmp. We continue to the loop helper in both setjmp cases.
     __cilk_prepare_spawn(&lf.sf);
 
-    __cilkrts_cilk_loop_helper64(data, body, grain, inclusive);
+    __cilkrts_cilk_loop_helper64(data, body, grain, inclusive,
+                                   current_loop_frame());
 
     CILK_ASSERT(local_lf()->start == local_lf()->end);
 
@@ -196,21 +206,22 @@ static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, 
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
-__cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int grainsize, int inclusive) {
+__cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int grainsize, int inclusive,
+                          __cilkrts_loop_frame *parent) {
     FORCE_VAR_SIZED_FRAME();
     uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
-    __cilkrts_enter_inner_loop_frame(&inner_lf);
+    __cilkrts_enter_inner_loop_frame(&inner_lf, parent);
 
-    __cilkrts_iteration_return status = __cilkrts_grab_first_iteration(&inner_lf, &i);
+    __cilkrts_iteration_return status = __cilkrts_grab_first_iteration(&inner_lf, parent, &i);
     i *= grainsize;
     if (status == SUCCESS_ITERATION) {
-        __cilkrts_detach(&inner_lf.sf, &inner_lf.parentLF->sf); // push the parent loop_frame to the deque
+        __cilkrts_detach(&inner_lf.sf, &parent->sf); // push the parent loop_frame to the deque
 
         do {
-            CILK_ASSERT(i + grainsize == inner_lf.parentLF->start * grainsize);
+            CILK_ASSERT(i + grainsize == parent->start * grainsize);
             body(data, i, i + grainsize - inclusive);
-            status = __cilkrts_loop_frame_next(&inner_lf);
+            status = __cilkrts_loop_frame_next(&inner_lf, parent);
             i += grainsize;
         } while (status == SUCCESS_ITERATION);
     }
@@ -220,13 +231,13 @@ __cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int gra
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
-    get_worker_from_stack(&inner_lf.sf)->local_loop_frame = inner_lf.parentLF;
-    CILK_ASSERT(local_lf() == inner_lf.parentLF);
+    get_worker_from_stack(&inner_lf.sf)->local_loop_frame = parent;
+    CILK_ASSERT(local_lf() == parent);
 
     // The inner loop frame is not a spawner, so if it was never detached there
     // is nothing to pop.
     if (inner_lf.sf.flags & CILK_FRAME_DETACHED)
-        __cilk_helper_epilogue(&inner_lf.sf, &inner_lf.parentLF->sf, /* spawner */ false);
+        __cilk_helper_epilogue(&inner_lf.sf, &parent->sf, /* spawner */ false);
 }
 
 static void cilk_for_loop_32(__cilk_abi_f32_t body, void *data, uint32_t end, unsigned int grain, int inclusive) {
@@ -239,7 +250,8 @@ static void cilk_for_loop_32(__cilk_abi_f32_t body, void *data, uint32_t end, un
     // Contains the setjmp. We continue to the loop helper in both setjmp cases.
     __cilk_prepare_spawn(&lf.sf);
 
-    __cilkrts_cilk_loop_helper32(data, body, grain, inclusive);
+    __cilkrts_cilk_loop_helper32(data, body, grain, inclusive,
+                                   current_loop_frame());
 
     CILK_ASSERT(local_lf()->start == local_lf()->end);
 
