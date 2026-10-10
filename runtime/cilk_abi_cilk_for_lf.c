@@ -64,14 +64,6 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
     return SUCCESS_ITERATION;
 }
 
-// The loop frame we are running in changes when a thief resumes the loop (it
-// gets a clone), and the thief is a different thread. Calls to the helpers
-// below follow the setjmp in cilk_for_loop_*, so we must not let the compiler
-// reuse the thread-local lookup from before the setjmp: keep this out of line.
-static __attribute__((noinline)) __cilkrts_loop_frame *current_loop_frame(void) {
-    return (__cilkrts_loop_frame *)__cilkrts_current_fh->current_stack_frame;
-}
-
 /* We handle both types of loops with the same function.
  * - If exclusive, we execute [0, count) in chunks of [i, i + grainsize), always incrementing i by grainsize.
  *   We execute a remainder chunk if any iterations are left.
@@ -128,7 +120,7 @@ static void cilk_for_loop_64(__cilk_abi_f64_t body, void *data, uint64_t end, un
     __cilk_prepare_spawn(&lf.sf);
 
     __cilkrts_cilk_loop_helper64(data, body, grain, inclusive,
-                                   current_loop_frame());
+                                   local_lf());
 
     CILK_ASSERT(local_lf()->start == local_lf()->end);
 
@@ -251,7 +243,7 @@ static void cilk_for_loop_32(__cilk_abi_f32_t body, void *data, uint32_t end, un
     __cilk_prepare_spawn(&lf.sf);
 
     __cilkrts_cilk_loop_helper32(data, body, grain, inclusive,
-                                   current_loop_frame());
+                                   local_lf());
 
     CILK_ASSERT(local_lf()->start == local_lf()->end);
 
