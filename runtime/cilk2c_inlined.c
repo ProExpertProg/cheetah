@@ -449,8 +449,10 @@ __cilkrts_leave_loop_frame(__cilkrts_loop_frame *lf) {
     }
 }
 
+__attribute__((always_inline))
 __cilkrts_loop_frame *local_lf(void) {
-    return __cilkrts_get_tls_worker()->local_loop_frame;
+    // the current frame of the fiber is the loop frame once the inner frame has been popped
+    return (__cilkrts_loop_frame *)__cilkrts_current_fh->current_stack_frame;
 }
 
 __attribute__((always_inline))
