@@ -1102,8 +1102,13 @@ static void finish_promote(__cilkrts_worker *const w, worker_id self,
 
     Closure_assert_ownership(self, parent);
     CILK_ASSERT(parent->has_cilk_callee == 0);
-    // for loop frames, parent->frame is a new frame that wasn't marked yet
-    __cilkrts_set_stolen(parent->frame);
+    // promote_child marks the frame as stolen, except for loop frames: there
+    // parent->frame is the thief's new loop frame, which isn't marked yet.
+    CILK_ASSERT(__cilkrts_stolen(parent->frame) ||
+                __cilkrts_is_loop(parent->frame));
+    if (__cilkrts_is_loop(parent->frame)) {
+        __cilkrts_set_stolen(parent->frame);
+    }
 
     // ANGE: if there are more frames to promote, the youngest frame that we
     // are stealing (i.e., parent) has been promoted and its closure call_parent
