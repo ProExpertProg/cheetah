@@ -113,6 +113,9 @@ struct closure_exception {
 // Loop frames
 //===============================================
 
+// Two cache lines, line aligned: the iteration range is updated with an atomic
+// exchange after every chunk, so nothing else may share its lines.
+#define LF_CACHELINE 64
 struct __cilkrts_loop_frame {
     // This needs to be on top so that we can just convert the pointer to a
     // __cilkrts_stack_frame
@@ -121,7 +124,10 @@ struct __cilkrts_loop_frame {
     // The indices for our iterations
     uint64_t start;
     uint64_t end;
-};
+    char _pad[2 * LF_CACHELINE - sizeof(__cilkrts_stack_frame) - 2 * sizeof(uint64_t)];
+} __attribute__((aligned(LF_CACHELINE)));
+_Static_assert(sizeof(struct __cilkrts_loop_frame) == 2 * LF_CACHELINE,
+               "loop frame must be two cache lines");
 
 struct __cilkrts_inner_loop_frame {
     // This needs to be on top so that we can just convert the pointer to a

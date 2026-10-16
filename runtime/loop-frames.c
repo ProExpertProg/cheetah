@@ -53,7 +53,12 @@ split_loop_frame(__cilkrts_stack_frame *frame_to_steal, __cilkrts_worker *w, __c
 __cilkrts_loop_frame *
 clone_loop_frame(__cilkrts_loop_frame *loop_frame, __cilkrts_worker *w) {
     __cilkrts_loop_frame *new_lf = cilk_internal_malloc(w, sizeof(__cilkrts_loop_frame), IM_LOOP_FRAMES);
-    memcpy(new_lf, loop_frame, sizeof(__cilkrts_loop_frame));
+    CILK_ASSERT(((uintptr_t)new_lf & (LF_CACHELINE - 1)) == 0);
+    // copy only the live fields (not the padding): the stack frame and the
+    // iteration range
+    memcpy(&new_lf->sf, &loop_frame->sf, sizeof(__cilkrts_stack_frame));
+    new_lf->start = __atomic_load_n(&loop_frame->start, __ATOMIC_RELAXED);
+    new_lf->end = __atomic_load_n(&loop_frame->end, __ATOMIC_RELAXED);
     __cilkrts_set_dynamic(new_lf);
     return new_lf;
 }

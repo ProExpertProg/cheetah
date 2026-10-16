@@ -361,14 +361,22 @@ static void *global_im_alloc(__cilkrts_worker *w, size_t size,
     if (!mem) {
         struct global_im_pool *im_pool = &(g->im_pool);
         // allocate from the global pool
-        if ((im_pool->mem_begin + size) > im_pool->mem_end) {
+        // Blocks of 64 bytes and up are cache-line aligned (all bucket sizes
+        // are powers of two, so the rest of a batch stays aligned).
+        size_t align = size >= 64 ? 64 : size;
+#define IM_ALIGN_UP(p)                                                         \
+    ((char *)(((uintptr_t)(p) + align - 1) & ~(uintptr_t)(align - 1)))
+        if (IM_ALIGN_UP(im_pool->mem_begin) + size > im_pool->mem_end) {
             // consider the left over as waste for now
             // TODO: Adding it to a random free list would be better.
             im_pool->wasted += im_pool->mem_end - im_pool->mem_begin;
             extend_global_pool(w);
         }
-        mem = im_pool->mem_begin;
-        im_pool->mem_begin += size;
+        char *aligned = IM_ALIGN_UP(im_pool->mem_begin);
+#undef IM_ALIGN_UP
+        im_pool->wasted += aligned - im_pool->mem_begin;
+        mem = aligned;
+        im_pool->mem_begin = aligned + size;
     }
 
     return mem;
