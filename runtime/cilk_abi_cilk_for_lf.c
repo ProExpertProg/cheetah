@@ -64,12 +64,18 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
     return SUCCESS_ITERATION;
 }
 
-// The loop frame we are running in is the current stack frame. It changes when
-// a thief resumes the loop (it gets a clone), and the thief is a different
-// thread. This is called right after the setjmp in cilk_for_loop_*, so it must
-// stay out of line: inlined, the compiler can reuse the thread-local lookup of
-// __cilkrts_current_fh done before the setjmp.
-static __attribute__((noinline)) __cilkrts_loop_frame *current_loop_frame(void) {
+// The loop frame we are running in is the current stack frame, which we look
+// up through the thread-local __cilkrts_current_fh. Which frame that is can
+// change whenever a thief resumes the loop (it gets a clone) on a different
+// thread.
+//  - It can change across the setjmp in cilk_for_loop_*, and across the one
+//    around the sync. Nothing derived before a setjmp may be used after it,
+//    including the thread-local address: the compiler spills that address once
+//    and reloads it after the setjmp (and after the helper call), where it
+//    belongs to the wrong thread. So local_lf() must stay out of line.
+//  - It cannot change while the loop helper runs, so the helper loads it once
+//    at its start (a fresh call, after the setjmp) and passes it on.
+static __attribute__((noinline)) __cilkrts_loop_frame *local_lf(void) {
     __cilkrts_stack_frame *sf = __cilkrts_current_fh->current_stack_frame;
     CILK_ASSERT(__cilkrts_is_loop(sf));
     return (__cilkrts_loop_frame *)sf;
@@ -86,9 +92,11 @@ static __attribute__((noinline)) __cilkrts_loop_frame *current_loop_frame(void) 
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
-__cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive,
-                          __cilkrts_loop_frame *parent) {
+__cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive) {
     FORCE_VAR_SIZED_FRAME();
+    // We are entered after the setjmp in cilk_for_loop_*; this does not change
+    // while we run.
+    __cilkrts_loop_frame *parent = local_lf();
     uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
     __cilkrts_enter_inner_loop_frame(&inner_lf, parent);
@@ -129,25 +137,24 @@ static void cilk_for_loop_64(__cilk_abi_f64_t body, void *data, uint64_t end, un
     // Contains the setjmp. We continue to the loop helper in both setjmp cases.
     __cilk_prepare_spawn(&lf.sf);
 
-    __cilkrts_cilk_loop_helper64(data, body, grain, inclusive,
-                                   current_loop_frame());
+    __cilkrts_cilk_loop_helper64(data, body, grain, inclusive);
 
-    CILK_ASSERT(current_loop_frame()->start == current_loop_frame()->end);
+    CILK_ASSERT(local_lf()->start == local_lf()->end);
 
     // cannot use __cilkrts_sync because we cannot allow the loop frame to be stored in a variable on the stack
     // maybe there's a way of doing that? still need setjmp in this function though
-    if (!__cilkrts_synced(&current_loop_frame()->sf)) {
-        if (__builtin_setjmp(current_loop_frame()->sf.ctx) == 0) {
-            sysdep_save_fp_ctrl_state(&current_loop_frame()->sf);
-            __cilkrts_sync(&current_loop_frame()->sf);
+    if (!__cilkrts_synced(&local_lf()->sf)) {
+        if (__builtin_setjmp(local_lf()->sf.ctx) == 0) {
+            sysdep_save_fp_ctrl_state(&local_lf()->sf);
+            __cilkrts_sync(&local_lf()->sf);
         } else {
             sanitizer_finish_switch_fiber();
         }
     }
 
     // a loop frame that isn't split has to be the original one
-    CILK_ASSERT(__cilkrts_is_split(&current_loop_frame()->sf) || current_loop_frame() == &lf);
-    __cilkrts_leave_loop_frame(current_loop_frame());
+    CILK_ASSERT(__cilkrts_is_split(&local_lf()->sf) || local_lf() == &lf);
+    __cilkrts_leave_loop_frame(local_lf());
 }
 
 __attribute__((noinline))
@@ -208,9 +215,11 @@ static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, 
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
-__cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int grainsize, int inclusive,
-                          __cilkrts_loop_frame *parent) {
+__cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int grainsize, int inclusive) {
     FORCE_VAR_SIZED_FRAME();
+    // We are entered after the setjmp in cilk_for_loop_*; this does not change
+    // while we run.
+    __cilkrts_loop_frame *parent = local_lf();
     uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
     __cilkrts_enter_inner_loop_frame(&inner_lf, parent);
@@ -251,25 +260,24 @@ static void cilk_for_loop_32(__cilk_abi_f32_t body, void *data, uint32_t end, un
     // Contains the setjmp. We continue to the loop helper in both setjmp cases.
     __cilk_prepare_spawn(&lf.sf);
 
-    __cilkrts_cilk_loop_helper32(data, body, grain, inclusive,
-                                   current_loop_frame());
+    __cilkrts_cilk_loop_helper32(data, body, grain, inclusive);
 
-    CILK_ASSERT(current_loop_frame()->start == current_loop_frame()->end);
+    CILK_ASSERT(local_lf()->start == local_lf()->end);
 
     // cannot use __cilkrts_sync because we cannot allow the loop frame to be stored in a variable on the stack
     // maybe there's a way of doing that? still need setjmp in this function though
-    if (!__cilkrts_synced(&current_loop_frame()->sf)) {
-        if (__builtin_setjmp(current_loop_frame()->sf.ctx) == 0) {
-            sysdep_save_fp_ctrl_state(&current_loop_frame()->sf);
-            __cilkrts_sync(&current_loop_frame()->sf);
+    if (!__cilkrts_synced(&local_lf()->sf)) {
+        if (__builtin_setjmp(local_lf()->sf.ctx) == 0) {
+            sysdep_save_fp_ctrl_state(&local_lf()->sf);
+            __cilkrts_sync(&local_lf()->sf);
         } else {
             sanitizer_finish_switch_fiber();
         }
     }
 
     // a loop frame that isn't split has to be the original one
-    CILK_ASSERT(__cilkrts_is_split(&current_loop_frame()->sf) || current_loop_frame() == &lf);
-    __cilkrts_leave_loop_frame(current_loop_frame());
+    CILK_ASSERT(__cilkrts_is_split(&local_lf()->sf) || local_lf() == &lf);
+    __cilkrts_leave_loop_frame(local_lf());
 }
 
 __attribute__((noinline))
