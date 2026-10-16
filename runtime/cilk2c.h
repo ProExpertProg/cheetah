@@ -160,7 +160,6 @@ __cilkrts_loop_frame_next(__cilkrts_inner_loop_frame *lf,
                           __cilkrts_loop_frame *parent);
 CHEETAH_API void __cilkrts_leave_loop_frame(__cilkrts_loop_frame *sf);
 
-CHEETAH_API __cilkrts_loop_frame *local_lf(void);
 
 // Not marked as CHEETAH_API as it may be deprecated soon
 unsigned __cilkrts_get_nworkers(void);

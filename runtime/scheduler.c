@@ -156,9 +156,6 @@ static void setup_for_execution(__cilkrts_worker *w, Closure *t) {
     sf->fh = fh;
     __cilkrts_current_fh = fh;
 
-    if (__cilkrts_is_loop(sf)) {
-        w->local_loop_frame = (__cilkrts_loop_frame *)sf;
-    }
 }
 
 // ANGE: When this is called, either a) a worker is about to pass a sync (though
@@ -707,7 +704,6 @@ void Cilk_exception_handler(__cilkrts_worker *w, char *exn,
             struct cilk_fiber *fh = __cilkrts_current_fh;
             __cilkrts_stack_frame *cur = fh->current_stack_frame;
             CILK_ASSERT(__cilkrts_is_loop(cur));
-            CILK_ASSERT(&w->local_loop_frame->sf == cur);
 
             // if dynamic, simply free and we're done
             if (__cilkrts_is_dynamic(cur)) {

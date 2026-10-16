@@ -139,10 +139,9 @@ __cilkrts_enter_frame_helper(__cilkrts_stack_frame *sf,
 __attribute__((always_inline))
 void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf, uint64_t start,
                                 uint64_t end) {
-    // Needs to come before we look up the worker, as we might cilkify here.
+    // May cilkify.
     __cilkrts_enter_frame(&lf->sf);
 
-    __cilkrts_worker *w = get_worker_from_stack(&lf->sf);
     cilkrts_alert(CFRAME, "(__cilkrts_enter_loop_frame) frame %p", (void *)lf);
 
     // could have flags set from enter_frame
@@ -152,8 +151,6 @@ void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf, uint64_t start,
     lf->start = start;
     lf->end = end;
 
-    // save so we can access it later when we're stackless
-    w->local_loop_frame = lf;
     CILK_ASSERT(__cilkrts_is_loop(&lf->sf));
 }
 
@@ -165,6 +162,7 @@ void __cilkrts_enter_loop_frame(__cilkrts_loop_frame *lf, uint64_t start,
 __attribute__((always_inline))
 void __cilkrts_enter_inner_loop_frame(__cilkrts_inner_loop_frame *lf,
                                       __cilkrts_loop_frame *parent) {
+
     cilkrts_alert(CFRAME, "(__cilkrts_enter_inner_loop_frame) frame %p",
                   (void *)lf);
     CILK_ASSERT(__cilkrts_is_loop(&parent->sf));
@@ -199,6 +197,7 @@ __cilkrts_grab_first_iteration(__cilkrts_inner_loop_frame *lf,
     CILK_ASSERT((lf->sf.flags & CILK_FRAME_DETACHED) == 0);
 
     // get the first iteration from loopframe
+
     *index = pLoopFrame->start++;
     cilkrts_alert(CFRAME,
                   "(__cilkrts_grab_iteration) Iteration %lu unconfirmed",
@@ -398,7 +397,7 @@ __cilkrts_leave_loop_frame(__cilkrts_loop_frame *lf) {
 
     CILK_ASSERT(CHECK_CILK_FRAME_MAGIC(w->g, &lf->sf));
     CILK_ASSERT(__cilkrts_is_loop(&lf->sf));
-    CILK_ASSERT(lf == w->local_loop_frame);
+    CILK_ASSERT(&lf->sf == lf->sf.fh->current_stack_frame);
 
     // We've already passed the cilk_sync
     CILK_ASSERT(__cilkrts_synced(&lf->sf));
@@ -448,10 +447,6 @@ __cilkrts_leave_loop_frame(__cilkrts_loop_frame *lf) {
             CILK_ASSERT(!__cilkrts_is_dynamic(&lf->sf));
         }
     }
-}
-
-__cilkrts_loop_frame *local_lf(void) {
-    return __cilkrts_get_tls_worker()->local_loop_frame;
 }
 
 __attribute__((always_inline))
