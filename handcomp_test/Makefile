@@ -7,7 +7,7 @@ DEFINES = $(ABI_DEF)
 # Spawn-only tests
 SPAWN_TESTS = cilksort fib mm_dac nqueens
 # Tests using the cilk_for ABI (loop frames)
-LOOP_TESTS = daxpy nqueens_loop mandelbrot mtrans mmul_loop mm_dac_loop
+LOOP_TESTS = daxpy nqueens_loop mandelbrot mtrans mmul_loop mm_dac_loop loop_spawn
 # Serial baselines, not linked with the runtime
 SERIAL_TESTS = mandelbrot_serial
 
@@ -34,7 +34,7 @@ $(SPAWN_TESTS) $(LOOP_TESTS): %: %.o $(UTIL)
 
 # mm_dac_loop both inlines the ABI (it spawns) and calls cilk_for, so the
 # inlined functions are defined in the test and in the runtime's cilk_for object.
-mm_dac_loop: EXTRA_LDFLAGS = -Wl,--allow-multiple-definition
+mm_dac_loop loop_spawn: EXTRA_LDFLAGS = -Wl,--allow-multiple-definition
 
 # mandelbrot compiled without Cilk, as the serial baseline
 mandelbrot_serial: mandelbrot_serial.o $(UTIL)
