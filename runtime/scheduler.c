@@ -886,6 +886,8 @@ static __cilkrts_stack_frame **do_dekker_on(worker_id self,
 /***
  * Promote the child frame of parent to a full closure.
  * Detach the parent and return it.
+ * In the case the frame is a loop frame, complete the stealing protocol
+ * and return NULL on failure.
  *
  * Assumptions: the parent is running on victim, and we own
  * the locks of both parent and deque[victim].
@@ -895,7 +897,7 @@ static __cilkrts_stack_frame **do_dekker_on(worker_id self,
  * In order to promote a child frame to a closure,
  * the parent's frame must be the last in its ready queue.
  *
- * Returns the child.
+ * Returns the child (or NULL if Loop Frame stealing fails).
  *
  * ANGE: I don't think this function actually detach the parent.  Someone
  *       calling this function has to do deque_xtract_top on the victim's

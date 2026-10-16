@@ -116,9 +116,15 @@ static void copy_loop_frame(__cilkrts_loop_frame *original, __cilkrts_loop_frame
 // In scenario b), the last child is successfully performing a provably good steal.
 //
 // Must be called after setup_for_sync has switched t->fiber to the fiber that
-// we are going to continue on (t->fiber_child). The frame we end up with must
-// be fh->current_stack_frame of that fiber, so we set that here.
-// had_fiber is true in scenario a) and false in scenario b).
+// we are going to continue on (t->fiber_child). The frame we end up with may
+// not be t->frame (we might swap in the most original loop frame), and the
+// current stack frame now lives in the fiber header, so we have to set it on
+// the new fiber head: the leftmost child that passed us this fiber left NULL
+// there (there was no meaningful frame to set it to), and the sync
+// continuation, setup_for_sync and any frame entered later on this fiber read
+// it to find the frame we are running in.
+// had_fiber is true in scenario a) and false in scenario b); it is only used
+// for diagnostics, as the fiber we held in scenario a) is already released.
 void sync_loop_frame(__cilkrts_worker *w, Closure *t, bool had_fiber) {
     struct cilk_fiber *fh = t->fiber;
     CILK_ASSERT(fh);
