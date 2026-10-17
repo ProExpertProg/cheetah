@@ -64,6 +64,10 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
     return SUCCESS_ITERATION;
 }
 
+static __attribute__((noinline)) __cilkrts_loop_frame *current_loop_frame(void) {
+    return (__cilkrts_loop_frame *)__cilkrts_current_fh->current_stack_frame;
+}
+
 /* We handle both types of loops with the same function.
  * - If exclusive, we execute [0, count) in chunks of [i, i + grainsize), always incrementing i by grainsize.
  *   We execute a remainder chunk if any iterations are left.
@@ -75,11 +79,9 @@ ATTR_POP_LF __cilkrts_iteration_return __cilkrts_loop_frame_next(__cilkrts_inner
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
-__cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive) {
+__cilkrts_cilk_loop_helper64(void *data, __cilk_abi_f64_t body, unsigned int grainsize, int inclusive,
+                          __cilkrts_loop_frame *parent) {
     FORCE_VAR_SIZED_FRAME();
-    // We are entered after the setjmp in cilk_for_loop_*, so this is the loop frame
-    // we are resumed in; it does not change while we run.
-    __cilkrts_loop_frame *parent = (__cilkrts_loop_frame *)__cilkrts_current_fh->current_stack_frame;
     uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
     __cilkrts_enter_inner_loop_frame(&inner_lf, parent);
@@ -121,7 +123,7 @@ static void cilk_for_loop_64(__cilk_abi_f64_t body, void *data, uint64_t end, un
     // Contains the setjmp. We continue to the loop helper in both setjmp cases.
     __cilk_prepare_spawn(&lf.sf);
 
-    __cilkrts_cilk_loop_helper64(data, body, grain, inclusive);
+    __cilkrts_cilk_loop_helper64(data, body, grain, inclusive, current_loop_frame());
 
     CILK_ASSERT(local_lf()->start == local_lf()->end);
 
@@ -199,11 +201,9 @@ static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, 
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
-__cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int grainsize, int inclusive) {
+__cilkrts_cilk_loop_helper32(void *data, __cilk_abi_f32_t body, unsigned int grainsize, int inclusive,
+                          __cilkrts_loop_frame *parent) {
     FORCE_VAR_SIZED_FRAME();
-    // We are entered after the setjmp in cilk_for_loop_*, so this is the loop frame
-    // we are resumed in; it does not change while we run.
-    __cilkrts_loop_frame *parent = (__cilkrts_loop_frame *)__cilkrts_current_fh->current_stack_frame;
     uint64_t i;
     __cilkrts_inner_loop_frame inner_lf;
     __cilkrts_enter_inner_loop_frame(&inner_lf, parent);
@@ -245,7 +245,7 @@ static void cilk_for_loop_32(__cilk_abi_f32_t body, void *data, uint32_t end, un
     // Contains the setjmp. We continue to the loop helper in both setjmp cases.
     __cilk_prepare_spawn(&lf.sf);
 
-    __cilkrts_cilk_loop_helper32(data, body, grain, inclusive);
+    __cilkrts_cilk_loop_helper32(data, body, grain, inclusive, current_loop_frame());
 
     CILK_ASSERT(local_lf()->start == local_lf()->end);
 
