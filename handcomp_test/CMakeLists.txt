@@ -69,6 +69,9 @@ target_link_libraries(nqueens_loop ${LIBRARIES})
 add_executable(daxpy2d daxpy2d.c ${UTIL})
 target_link_libraries(daxpy2d ${LIBRARIES})
 
+add_executable(cilk_for_chunks cilk_for_chunks.c)
+target_link_libraries(cilk_for_chunks ${LIBRARIES})
+
 add_executable(mandelbrot mandelbrot.c ${UTIL})
 target_link_libraries(mandelbrot ${LIBRARIES})
 
