@@ -158,15 +158,20 @@ static void cilk_for_loop_helper_64(__cilk_abi_f64_t body, void *data, uint64_t 
  *
  * A loop of n iterations with grainsize G has m = n / G full chunks and r = n % G leftover iterations. The
  * original schedule runs m chunks of G iterations in the loop frame and the r leftover iterations as one extra
- * chunk, i.e. m + 1 chunks, the last of them short. When r != 0 and m >= 1 we instead run exactly m chunks and
- * give every chunk a share of the leftover iterations:
- *     G2 = G + r / m,   r2 = r % m
- *     chunk i (0 <= i < m) is [lo(i), hi(i)) with lo(i) = i * G2 + min(i, r2),
+ * chunk, i.e. m + 1 chunks, the last of them short. With only a few chunks per worker that is far from what the
+ * divide-and-conquer schedule does (it halves the loop until a piece has at most G iterations, so it creates
+ * between n / G and 2n / G pieces of between G / 2 and G iterations).
+ *
+ * When r != 0 and m >= 1 we instead halve the grainsize, g = G / 2, and cut the loop into m' = n / g chunks
+ * (m' >= 2) that share the iterations left over by g, r' = n % g:
+ *     G2 = g + r' / m',   r2 = r' % m'
+ *     chunk i (0 <= i < m') is [lo(i), hi(i)) with lo(i) = i * G2 + min(i, r2),
  *                                                  hi(i) = lo(i) + G2 + (i < r2)
- * so the first r2 chunks have G2 + 1 iterations and the others G2. The chunks are contiguous, in order, cover
- * [0, n) exactly once (hi(i) == lo(i + 1), lo(0) == 0, hi(m - 1) == m * G2 + r2 == n), and each has at least G and
- * less than 2G iterations. When r == 0 this is exactly the original schedule. Inclusive loops and loops with
- * m == 0 keep the original schedule. The loop frame only counts chunk indices, so splitting by thieves is unchanged.
+ * so the first r2 chunks have G2 + 1 iterations and the others G2. The chunks are contiguous, in order and cover
+ * [0, n) exactly once (hi(i) == lo(i + 1), lo(0) == 0, hi(m' - 1) == m' * G2 + r2 == n); every chunk has at least
+ * g and at most G iterations. When r == 0 the original schedule is used. Inclusive loops and loops with m == 0
+ * (a single chunk of fewer than G iterations) keep the original schedule. The loop frame only counts chunk
+ * indices, so splitting by thieves is unchanged.
  */
 
 // we cannot inline this function because of local variables
@@ -249,10 +254,13 @@ static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, 
     CILK_ASSERT(end == count / grain);
     CILK_ASSERT(rem == count % grain);
 
-    // spread the remainder over the chunks (see "Spreading the remainder")
+    // there is a remainder: halve the grainsize (it is at least 2 here), then spread what is left over
+    // (see "Spreading the remainder")
     if (rem != 0 && end != 0 && !inclusive) {
-        uint64_t g2 = (uint64_t)grain + rem / end, r2 = rem % end;
-        return cilk_for_loop_spread_64(body, data, end, g2, r2);
+        uint64_t g = grain >> 1;
+        uint64_t end2 = count / g, rem2 = count % g;
+        uint64_t g2 = g + rem2 / end2, r2 = rem2 % end2;
+        return cilk_for_loop_spread_64(body, data, end2, g2, r2);
     }
 
     // if inclusive, remainder always contains at least an iteration
@@ -441,10 +449,13 @@ static void cilk_for_impl_32(__cilk_abi_f32_t body, void *data, uint32_t count, 
     CILK_ASSERT(end == count / grain);
     CILK_ASSERT(rem == count % grain);
 
-    // spread the remainder over the chunks (see "Spreading the remainder")
+    // there is a remainder: halve the grainsize (it is at least 2 here), then spread what is left over
+    // (see "Spreading the remainder")
     if (rem != 0 && end != 0 && !inclusive) {
-        uint32_t g2 = grain + rem / end, r2 = rem % end;
-        return cilk_for_loop_spread_32(body, data, end, g2, r2);
+        uint32_t g = grain >> 1;
+        uint32_t end2 = count / g, rem2 = count % g;
+        uint32_t g2 = g + rem2 / end2, r2 = rem2 % end2;
+        return cilk_for_loop_spread_32(body, data, end2, g2, r2);
     }
 
     // if inclusive, remainder always contains at least an iteration
