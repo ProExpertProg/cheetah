@@ -19,7 +19,8 @@ struct innerData {
     double x0, y0, xstep, ystep;
     int width, max_depth;
     unsigned char *output;
-    uint64_t j; // also grainsize for loop
+    uint64_t j; // also grainsize for the inner loop
+    uint64_t outer_grain; // grainsize of the outer loop (unused in the inner copies)
 };
 
 void innerBody(void *data, uint64_t low, uint64_t high) {
@@ -62,13 +63,13 @@ void outerBody(void *data, uint64_t low, uint64_t high) {
 
 unsigned char *
 mandelbrot(double x0, double y0, double x1, double y1, int width, int height, int max_depth, unsigned char *output,
-           uint64_t grainsize) {
+           uint64_t grainsize, uint64_t outer_grain) {
     double xstep = (x1 - x0) / width;
     double ystep = (y1 - y0) / height;
 
     struct innerData outerD = {
             .x0=x0, .y0=y0, .xstep=xstep, .ystep=ystep,
-            .width=width, .max_depth=max_depth, .output=output, .j=grainsize // reuse j
+            .width=width, .max_depth=max_depth, .output=output, .j=grainsize, .outer_grain=outer_grain // reuse j
     };
 
     // Traverse the sample space in equally spaced steps with width * height samples
@@ -78,7 +79,7 @@ mandelbrot(double x0, double y0, double x1, double y1, int width, int height, in
         innerBody(&outerD, 0, width);
     }
 #else
-    __cilkrts_cilk_for_64(outerBody, &outerD, height, 1);
+    __cilkrts_cilk_for_64(outerBody, &outerD, height, outer_grain);
 #endif
     return output;
 }
@@ -86,12 +87,12 @@ mandelbrot(double x0, double y0, double x1, double y1, int width, int height, in
 
 int usage(void) {
     fprintf(stderr,
-            "\nUsage: mandelbrot [-x width] [-y height] [-n width=height/2] [-d depth] [-g grainsize] [-c] [-h]\n\n");
+            "\nUsage: mandelbrot [-x width] [-y height] [-n width=height/2] [-d depth] [-g inner grainsize] [-o outer grainsize] [-c] [-h]\n\n");
     return -1;
 }
 
-const char *specifiers[] = {"-x", "-y", "-n", "-d", "-c", "-g", "-h", 0};
-int opt_types[] = {LONGARG, LONGARG, LONGARG, INTARG, BOOLARG, LONGARG, BOOLARG, 0};
+const char *specifiers[] = {"-x", "-y", "-n", "-d", "-c", "-g", "-o", "-h", 0};
+int opt_types[] = {LONGARG, LONGARG, LONGARG, INTARG, BOOLARG, LONGARG, LONGARG, BOOLARG, 0};
 
 int main(int argc, char *argv[]) {
 
@@ -99,15 +100,16 @@ int main(int argc, char *argv[]) {
     double y0 = -0.875;
     double x1 = 1;
     double y1 = 0.875;
-    int height = 1024, width = 2048;
-    int n = 0;
+    long height = 1024, width = 2048; // long because LONGARG stores a long
+    long n = 0;
 
     int max_depth = 100;
-    unsigned int grainsize = 1;
+    long grainsize = 1; // long because LONGARG stores a long
+    long outer_grain = 1;
 
     int help = 0, check = 0;
 
-    get_options(argc, argv, specifiers, opt_types, &width, &height, &n, &max_depth, &check, &grainsize, &help);
+    get_options(argc, argv, specifiers, opt_types, &width, &height, &n, &max_depth, &check, &grainsize, &outer_grain, &help);
 
     if (n != 0) {
         height = n;
@@ -128,7 +130,7 @@ int main(int argc, char *argv[]) {
 
     for (int t = 0; t < TIMING_COUNT; t++) {
         begin = ktiming_getmark();
-        mandelbrot(x0, y0, x1, y1, width, height, max_depth, output, grainsize);
+        mandelbrot(x0, y0, x1, y1, width, height, max_depth, output, grainsize, outer_grain);
         end = ktiming_getmark();
         running_time[t] = ktiming_diff_nsec(&begin, &end);
         printf("Output: %x\n", output[3]); // otherwise the whole mandelbrot function gets optimized away in the case of the serial loop

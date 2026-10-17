@@ -12,6 +12,7 @@
 #include "ktiming.h"
 
 extern size_t ZERO;
+static unsigned int grainsize = 1; // grainsize of the cilk_for in every nqueens call (argv[2])
 void __attribute__((weak)) dummy(void *p) { return; }
 
 /* 
@@ -99,7 +100,7 @@ int nqueens(int n, int j, const char *a) {
     dummy(alloca(ZERO));
 
     forData data = {.count=count, .j=j, .a=a, .n=n};
-    __cilkrts_cilk_for_64(body, &data, n, 1);
+    __cilkrts_cilk_for_64(body, &data, n, grainsize);
 
     for (i = 0; i < n; i++) {
         solNum += count[i];
@@ -114,11 +115,13 @@ int main(int argc, char *argv[]) {
   int res;
 
   if(argc < 2) {
-      fprintf (stderr, "Usage: %s <n>\n", argv[0]);
+      fprintf (stderr, "Usage: %s <n> [grainsize]\n", argv[0]);
       fprintf (stderr, "Use default board size, n = 13.\n");
       exit(0);
   } else {
       n = atoi (argv[1]);
+      if (argc > 2)
+          grainsize = atoi(argv[2]);
       printf ("Running %s with n = %d.\n", argv[0], n);
   }
 

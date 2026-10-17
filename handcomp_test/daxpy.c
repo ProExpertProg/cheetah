@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
     double a = 3.0;
 
     uint64_t N = 1000000;
-    unsigned int grainsize = 1;
+    long grainsize = 1; // long because LONGARG stores a long
     int help = 0, check = 0;
 
     get_options(argc, argv, specifiers, opt_types, &N, &check, &grainsize, &help);
