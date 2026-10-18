@@ -2,14 +2,14 @@
 //
 //   cilk_for_chunks [--spread]
 //
-// 1. Pure arithmetic (no runtime): for all n, G in a range with n / G >= 1 and n % G != 0, the "spread the remainder"
-//    chunking
-//        m = n / G, r = n % G, G2 = G + r / m, r2 = r % m,
+// 1. Pure arithmetic (no runtime): for all n, G in a range with n / G >= 1 and n % G != 0, the "halve and spread
+//    the remainder" chunking
+//        g = G / 2, m' = n / g, r' = n % g, G2 = g + r' / m', r2 = r' % m',
 //        chunk i = [i*G2 + min(i, r2), i*G2 + G2 + min(i+1, r2))
-//    partitions [0, n) into m contiguous chunks of G2 + 1 (the first r2) or G2 iterations, and every chunk has at least G
-//    and less than 2G iterations.
+//    partitions [0, n) into m' contiguous chunks of G2 + 1 (the first r2) or G2 iterations, every chunk has at least g
+//    and at most G iterations, and it creates at least as many chunks as the original schedule has full ones.
 // 2. Runtime: every iteration runs exactly once, and the chunks are the original ones (m chunks of G plus one of r)
-//    or, with --spread, the spread ones above (when r != 0 and m >= 1). An inclusive loop over [0, n]
+//    or, with --spread, the halved and spread ones above (when r != 0 and m >= 1). An inclusive loop over [0, n]
 //    is checked as the loop over n + 1 iterations (the body gets the inclusive upper bound hi - 1).
 
 #include <stdint.h>
@@ -66,14 +66,16 @@ static void check_arithmetic(void) {
             uint64_t m = n / G, r = n % G;
             if (m == 0 || r == 0)
                 continue; // original chunking is used
-            uint64_t G2 = G + r / m, r2 = r % m, prev_hi = 0;
-            for (uint64_t i = 0; i < m; i++) {
+            uint64_t g = G / 2, m2 = n / g, r_ = n % g;
+            uint64_t G2 = g + r_ / m2, r2 = r_ % m2, prev_hi = 0;
+            if (m2 < 2 * m) FAIL("fewer chunks than 2m n=%lu G=%lu", n, G);
+            for (uint64_t i = 0; i < m2; i++) {
                 uint64_t lo = i * G2 + umin(i, r2);
                 uint64_t hi = i * G2 + G2 + umin(i + 1, r2);
                 uint64_t size = hi - lo;
                 if (lo != prev_hi) FAIL("gap/overlap n=%lu G=%lu chunk %lu", n, G, i);
                 if (size != G2 + (i < r2)) FAIL("size n=%lu G=%lu chunk %lu", n, G, i);
-                if (size < G || size >= 2 * G) FAIL("size bound n=%lu G=%lu chunk %lu size %lu", n, G, i, size);
+                if (size < g || size > G) FAIL("size bound n=%lu G=%lu chunk %lu size %lu", n, G, i, size);
                 prev_hi = hi;
             }
             if (prev_hi != n) FAIL("does not cover n=%lu G=%lu (ends at %lu)", n, G, prev_hi);
@@ -87,8 +89,9 @@ static void check_arithmetic(void) {
 static void expected_chunks(uint64_t n, uint64_t G, int spread, range_t *out, uint64_t *cnt) {
     uint64_t m = n / G, r = n % G, k = 0;
     if (spread && m >= 1 && r != 0) {
-        uint64_t G2 = G + r / m, r2 = r % m;
-        for (uint64_t i = 0; i < m; i++) {
+        uint64_t g = G / 2, m2 = n / g, r_ = n % g;
+        uint64_t G2 = g + r_ / m2, r2 = r_ % m2;
+        for (uint64_t i = 0; i < m2; i++) {
             out[k].lo = i * G2 + umin(i, r2);
             out[k].hi = i * G2 + G2 + umin(i + 1, r2);
             k++;
@@ -175,7 +178,7 @@ int main(int argc, char **argv) {
                     check_one(ns[a], Gs[b], bits, inclusive, spread);
                     checks++;
                 }
-    printf("runtime: %lu loops checked (schedule: %s)\n", checks, spread ? "spread remainder" : "original");
+    printf("runtime: %lu loops checked (schedule: %s)\n", checks, spread ? "halved grain, spread remainder" : "original");
     printf(failures ? "FAILED (%d)\n" : "PASSED\n", failures);
     return failures != 0;
 }
