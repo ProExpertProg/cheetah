@@ -7,7 +7,7 @@ DEFINES = $(ABI_DEF)
 # Spawn-only tests
 SPAWN_TESTS = cilksort fib mm_dac nqueens
 # Tests using the cilk_for ABI (loop frames)
-LOOP_TESTS = daxpy daxpy2dnqueens_loop mandelbrot mtrans mmul_loop mm_dac_loop
+LOOP_TESTS = daxpy daxpy2d nqueens_loop mandelbrot mtrans mmul_loop mm_dac_loop
 # Serial baselines, not linked with the runtime
 SERIAL_TESTS = mandelbrot_serial
 
