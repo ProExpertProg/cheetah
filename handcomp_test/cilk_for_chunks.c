@@ -8,9 +8,9 @@
 //        chunk i = [i*G2 + min(i, r2), i*G2 + G2 + min(i+1, r2))
 //    partitions [0, n) into m' contiguous chunks of G2 + 1 (the first r2) or G2 iterations, every chunk has at least g
 //    and at most G iterations, and it creates at least as many chunks as the original schedule has full ones.
-// 2. Runtime: every iteration runs exactly once, and (inclusive == 0) the chunks are the original ones
-//    (m chunks of G plus one of r) or, with --spread, the halved and spread ones above (when r != 0 and m >= 1).
-//    Inclusive loops must keep the original schedule in both modes.
+// 2. Runtime: every iteration runs exactly once, and the chunks are the original ones (m chunks of G plus one of r)
+//    or, with --spread, the halved and spread ones above (when r != 0 and m >= 1). An inclusive loop over [0, n]
+//    is checked as the loop over n + 1 iterations (the body gets the inclusive upper bound hi - 1).
 
 #include <stdint.h>
 #include <stdio.h>
@@ -145,17 +145,19 @@ static void check_one(uint64_t n, unsigned G, int bits, int inclusive, int sprea
         return;
     }
 
-    if (!inclusive) {
-        uint64_t ecnt;
-        expected_chunks(n, G, spread, expect, &ecnt);
+    // an inclusive loop over [0, n] is the loop over n + 1 iterations whose body gets the inclusive upper bound
+    {
+        uint64_t N = n + (inclusive ? 1 : 0), ecnt;
+        expected_chunks(N, G, spread, expect, &ecnt);
         if (got != ecnt) {
-            FAIL("bits=%d n=%lu G=%u spread=%d: %lu chunks, expected %lu", bits, n, G, spread, got, ecnt);
+            FAIL("bits=%d incl=%d n=%lu G=%u spread=%d: %lu chunks, expected %lu", bits, inclusive, n, G, spread, got,
+                 ecnt);
             return;
         }
         for (uint64_t i = 0; i < ecnt; i++)
-            if (calls[i].lo != expect[i].lo || calls[i].hi != expect[i].hi) {
-                FAIL("bits=%d n=%lu G=%u spread=%d: chunk %lu is [%lu,%lu), expected [%lu,%lu)", bits, n, G, spread, i,
-                     calls[i].lo, calls[i].hi, expect[i].lo, expect[i].hi);
+            if (calls[i].lo != expect[i].lo || calls[i].hi + (inclusive ? 1 : 0) != expect[i].hi) {
+                FAIL("bits=%d incl=%d n=%lu G=%u spread=%d: chunk %lu is [%lu,%lu], expected [%lu,%lu)", bits, inclusive,
+                     n, G, spread, i, calls[i].lo, calls[i].hi, expect[i].lo, expect[i].hi);
                 return;
             }
     }

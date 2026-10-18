@@ -169,14 +169,16 @@ static void cilk_for_loop_helper_64(__cilk_abi_f64_t body, void *data, uint64_t 
  *                                                  hi(i) = lo(i) + G2 + (i < r2)
  * so the first r2 chunks have G2 + 1 iterations and the others G2. The chunks are contiguous, in order and cover
  * [0, n) exactly once (hi(i) == lo(i + 1), lo(0) == 0, hi(m' - 1) == m' * G2 + r2 == n); every chunk has at least
- * g and at most G iterations. When r == 0 the original schedule is used. Inclusive loops and loops with m == 0
- * (a single chunk of fewer than G iterations) keep the original schedule. The loop frame only counts chunk
- * indices, so splitting by thieves is unchanged.
+ * g and at most G iterations. When r == 0 the original schedule is used, and so it is for loops with m == 0
+ * (a single chunk of fewer than G iterations). An inclusive loop over [0, count] is the loop over
+ * n = count + 1 iterations whose body gets the inclusive upper bound hi - 1; its original schedule is exactly the
+ * one above for n (m chunks of G and a remainder chunk of n % G), so the same rules apply with n in place of the
+ * iteration count. The loop frame only counts chunk indices, so splitting by thieves is unchanged.
  */
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
-__cilkrts_cilk_loop_spread_helper64(void *data, __cilk_abi_f64_t body, uint64_t g2, uint64_t r2,
+__cilkrts_cilk_loop_spread_helper64(void *data, __cilk_abi_f64_t body, uint64_t g2, uint64_t r2, int inclusive,
                                     __cilkrts_loop_frame *parent) {
     FORCE_VAR_SIZED_FRAME();
     uint64_t i; // chunk index
@@ -190,7 +192,7 @@ __cilkrts_cilk_loop_spread_helper64(void *data, __cilk_abi_f64_t body, uint64_t 
         do {
             CILK_ASSERT(i + 1 == parent->start);
             uint64_t lo = i * g2 + (i < r2 ? i : r2);
-            body(data, lo, lo + g2 + (i < r2));
+            body(data, lo, lo + g2 + (i < r2) - inclusive);
             status = __cilkrts_loop_frame_next(&inner_lf, parent);
             i++;
         } while (status == SUCCESS_ITERATION);
@@ -198,7 +200,7 @@ __cilkrts_cilk_loop_spread_helper64(void *data, __cilk_abi_f64_t body, uint64_t 
 
     if (status == SUCCESS_LAST_ITERATION) {
         uint64_t lo = i * g2 + (i < r2 ? i : r2);
-        body(data, lo, lo + g2 + (i < r2));
+        body(data, lo, lo + g2 + (i < r2) - inclusive);
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
@@ -211,7 +213,8 @@ __cilkrts_cilk_loop_spread_helper64(void *data, __cilk_abi_f64_t body, uint64_t 
         __cilk_helper_epilogue(&inner_lf.sf, &parent->sf, /* spawner */ false);
 }
 
-static void cilk_for_loop_spread_64(__cilk_abi_f64_t body, void *data, uint64_t end, uint64_t g2, uint64_t r2) {
+static void cilk_for_loop_spread_64(__cilk_abi_f64_t body, void *data, uint64_t end, uint64_t g2, uint64_t r2,
+                                         int inclusive) {
     FORCE_VAR_SIZED_FRAME();
     __cilkrts_loop_frame lf;
     __cilkrts_enter_loop_frame(&lf, 0, end);
@@ -219,7 +222,7 @@ static void cilk_for_loop_spread_64(__cilk_abi_f64_t body, void *data, uint64_t 
     // Contains the setjmp. We continue to the loop helper in both setjmp cases.
     __cilk_prepare_spawn(&lf.sf);
 
-    __cilkrts_cilk_loop_spread_helper64(data, body, g2, r2, current_loop_frame());
+    __cilkrts_cilk_loop_spread_helper64(data, body, g2, r2, inclusive, current_loop_frame());
 
     CILK_ASSERT(local_lf()->start == local_lf()->end);
 
@@ -255,12 +258,17 @@ static void cilk_for_impl_64(__cilk_abi_f64_t body, void *data, uint64_t count, 
     CILK_ASSERT(rem == count % grain);
 
     // there is a remainder: halve the grainsize (it is at least 2 here), then spread what is left over
-    // (see "Spreading the remainder")
-    if (rem != 0 && end != 0 && !inclusive) {
+    // (see "Spreading the remainder"). An inclusive loop over [0, count] has count + 1 iterations.
+    uint64_t n = count + inclusive, n_end = end, n_rem = rem; // n == 0 only if count + 1 wraps around
+    if (inclusive) {
+        n_end = n / grain;
+        n_rem = n % grain;
+    }
+    if (n_rem != 0 && n_end != 0) {
         uint64_t g = grain >> 1;
-        uint64_t end2 = count / g, rem2 = count % g;
+        uint64_t end2 = n / g, rem2 = n % g;
         uint64_t g2 = g + rem2 / end2, r2 = rem2 % end2;
-        return cilk_for_loop_spread_64(body, data, end2, g2, r2);
+        return cilk_for_loop_spread_64(body, data, end2, g2, r2, inclusive);
     }
 
     // if inclusive, remainder always contains at least an iteration
@@ -371,7 +379,7 @@ static void cilk_for_loop_helper_32(__cilk_abi_f32_t body, void *data, uint32_t 
 
 // we cannot inline this function because of local variables
 static void __attribute__ ((noinline))
-__cilkrts_cilk_loop_spread_helper32(void *data, __cilk_abi_f32_t body, uint32_t g2, uint32_t r2,
+__cilkrts_cilk_loop_spread_helper32(void *data, __cilk_abi_f32_t body, uint32_t g2, uint32_t r2, int inclusive,
                                     __cilkrts_loop_frame *parent) {
     FORCE_VAR_SIZED_FRAME();
     uint64_t i; // chunk index
@@ -385,7 +393,7 @@ __cilkrts_cilk_loop_spread_helper32(void *data, __cilk_abi_f32_t body, uint32_t 
         do {
             CILK_ASSERT(i + 1 == parent->start);
             uint32_t lo = (uint32_t)(i * g2 + (i < r2 ? i : r2));
-            body(data, lo, lo + g2 + (i < r2));
+            body(data, lo, lo + g2 + (i < r2) - inclusive);
             status = __cilkrts_loop_frame_next(&inner_lf, parent);
             i++;
         } while (status == SUCCESS_ITERATION);
@@ -393,7 +401,7 @@ __cilkrts_cilk_loop_spread_helper32(void *data, __cilk_abi_f32_t body, uint32_t 
 
     if (status == SUCCESS_LAST_ITERATION) {
         uint32_t lo = (uint32_t)(i * g2 + (i < r2 ? i : r2));
-        body(data, lo, lo + g2 + (i < r2));
+        body(data, lo, lo + g2 + (i < r2) - inclusive);
     }
 
     // local loop frame might have been modified if we have a nested loop inside loop body
@@ -406,7 +414,8 @@ __cilkrts_cilk_loop_spread_helper32(void *data, __cilk_abi_f32_t body, uint32_t 
         __cilk_helper_epilogue(&inner_lf.sf, &parent->sf, /* spawner */ false);
 }
 
-static void cilk_for_loop_spread_32(__cilk_abi_f32_t body, void *data, uint32_t end, uint32_t g2, uint32_t r2) {
+static void cilk_for_loop_spread_32(__cilk_abi_f32_t body, void *data, uint32_t end, uint32_t g2, uint32_t r2,
+                                         int inclusive) {
     FORCE_VAR_SIZED_FRAME();
     __cilkrts_loop_frame lf;
     __cilkrts_enter_loop_frame(&lf, 0, end);
@@ -414,7 +423,7 @@ static void cilk_for_loop_spread_32(__cilk_abi_f32_t body, void *data, uint32_t 
     // Contains the setjmp. We continue to the loop helper in both setjmp cases.
     __cilk_prepare_spawn(&lf.sf);
 
-    __cilkrts_cilk_loop_spread_helper32(data, body, g2, r2, current_loop_frame());
+    __cilkrts_cilk_loop_spread_helper32(data, body, g2, r2, inclusive, current_loop_frame());
 
     CILK_ASSERT(local_lf()->start == local_lf()->end);
 
@@ -450,12 +459,17 @@ static void cilk_for_impl_32(__cilk_abi_f32_t body, void *data, uint32_t count, 
     CILK_ASSERT(rem == count % grain);
 
     // there is a remainder: halve the grainsize (it is at least 2 here), then spread what is left over
-    // (see "Spreading the remainder")
-    if (rem != 0 && end != 0 && !inclusive) {
-        uint32_t g = grain >> 1;
-        uint32_t end2 = count / g, rem2 = count % g;
-        uint32_t g2 = g + rem2 / end2, r2 = rem2 % end2;
-        return cilk_for_loop_spread_32(body, data, end2, g2, r2);
+    // (see "Spreading the remainder"). An inclusive loop over [0, count] has count + 1 iterations.
+    uint64_t n = (uint64_t)count + inclusive, n_end = end, n_rem = rem;
+    if (inclusive) {
+        n_end = n / grain;
+        n_rem = n % grain;
+    }
+    if (n_rem != 0 && n_end != 0 && n <= UINT32_MAX) {
+        uint64_t g = grain >> 1;
+        uint64_t end2 = n / g, rem2 = n % g;
+        uint64_t g2 = g + rem2 / end2, r2 = rem2 % end2;
+        return cilk_for_loop_spread_32(body, data, (uint32_t)end2, (uint32_t)g2, (uint32_t)r2, inclusive);
     }
 
     // if inclusive, remainder always contains at least an iteration
