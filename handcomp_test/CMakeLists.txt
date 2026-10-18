@@ -63,6 +63,9 @@ add_custom_target(handcomp_check
 add_executable(daxpy daxpy.c ${UTIL})
 target_link_libraries(daxpy ${LIBRARIES})
 
+add_executable(cilk_for_chunks cilk_for_chunks.c)
+target_link_libraries(cilk_for_chunks ${LIBRARIES})
+
 add_executable(nqueens_loop nqueens_loop.c ${UTIL})
 target_link_libraries(nqueens_loop ${LIBRARIES})
 
