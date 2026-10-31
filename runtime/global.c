@@ -146,7 +146,7 @@ static void parse_rts_environment(global_state *g) {
 }
 
 #ifdef CILK_DEFAULT_GRAINSIZE
-CHEETAH_INTERNAL uint64_t default_grainsize = CILK_DEFAULT_GRAINSIZE;
+uint64_t default_grainsize = CILK_DEFAULT_GRAINSIZE;
 
 static void set_default_grainsize() {
     uint64_t env = env_get_int("CILK_GRAINSIZE");

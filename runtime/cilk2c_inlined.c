@@ -536,7 +536,7 @@ __internal_preserve_stack_frame_type_helper(void) {
 /// Otherwise, we use the standard formula to calculate the grainsize at
 /// runtime.
 #ifdef CILK_DEFAULT_GRAINSIZE
-extern CHEETAH_INTERNAL uint64_t default_grainsize;
+extern uint64_t default_grainsize;
 
 /// Calculate the maximum number stored in a type
 #define umax(T) ((T) ~(T)0)
